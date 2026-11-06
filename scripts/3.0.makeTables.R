@@ -1,21 +1,9 @@
 ###### Supplementary Tables S1-S3 ######
 rm(list = ls())
 library(dplyr)
-if (isTRUE(getOption("ICBO.rebuildSummaries", FALSE))) {
-  gp <- readRDS("midstream/1.2.GP_Accuracy/1.2.GP_PublicationSummary.rds")
-  bo <- readRDS("midstream/2.1.BO_Evaluation/2.1.BO_PublicationSummary.rds")
-  parameters <- readRDS("data/phenotype/0.3.parmeterSet.rds")
-} else {
-  if (!file.exists("data/publicationResults.rds")) {
-    stop("Publication archives are not distributed with this code-only release. ",
-      "Supply the local archive, or rebuild the GP/BO summaries and set ",
-      "options(ICBO.rebuildSummaries = TRUE); see README.md.", call. = FALSE)
-  }
-  publication <- readRDS("data/publicationResults.rds")
-  gp <- publication$gpAccuracy
-  bo <- publication$boCounts
-  parameters <- publication$parameters
-}
+gp <- readRDS("midstream/1.2.GP_Accuracy/1.2.GP_PublicationSummary.rds")
+bo <- readRDS("midstream/2.1.BO_Evaluation/2.1.BO_PublicationSummary.rds")
+parameters <- readRDS("data/phenotype/0.3.parmeterSet.rds")
 dir.create("midstream", showWarnings = FALSE)
 designLabels <- c(All = "Design-D", Once = "Design-B")
 

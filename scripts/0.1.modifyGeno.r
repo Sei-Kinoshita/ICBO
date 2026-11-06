@@ -20,19 +20,15 @@ dir.create(dirSave, recursive = TRUE, showWarnings = FALSE)
 
 
 
-###### 1. Published genotype panels and fixed selected-accession IDs ######
-### The published matrices already underwent full-panel MAF/LD filtering and
-### removal of markers containing heterozygotes. See README for raw-data provenance.
+###### 1. Genotype panels and selected-accession IDs ######
+### Locally prepared panels from Takanashi et al. (2022) and Kajiya-Kanegae et al. (2021).
+### Full-panel MAF/LD filtering and removal of heterozygous markers precede this step.
 selectedFile <- "data/SelectedIndList_kMedoids_nIndSb_79_nIndGm_66.rds"
 if (!file.exists(selectedFile)) {
-  stop("Selected accession IDs are not distributed with this code-only release. ",
-    "Supply ", selectedFile, " as described in README.md.", call. = FALSE)
+  stop("Missing selected accession IDs: ", selectedFile, call. = FALSE)
 }
-### Existing public full-panel files are at the repository root.
 fileSb <- paste0(dirSave, "0.1.Sorghum237_geno_Maf_0.1_LD_0.6.rds")
 fileGm <- paste0(dirSave, "0.1.Soybean198_geno_Maf_0.1_LD_0.6.rds")
-if (!file.exists(fileSb)) fileSb <- basename(fileSb)
-if (!file.exists(fileGm)) fileGm <- basename(fileGm)
 genoSbMat <- readRDS(fileSb)
 genoGmMat <- readRDS(fileGm)
 selIndLst <- readRDS(selectedFile)

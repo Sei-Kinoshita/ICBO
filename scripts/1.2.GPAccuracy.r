@@ -1,6 +1,5 @@
-###### 1.2. Manuscript Figure 2 and Figures S3, S5-S8 ######
+###### 1.2. Summarize genomic prediction results ######
 rm(list = ls())
-require(ggplot2)
 require(dplyr)
 require(multcompView)
 source("scripts/function_scripts/2.1.function.BOEval.R")
@@ -9,14 +8,12 @@ scriptID <- "1.2."
 saveDir <- "midstream/1.2.GP_Accuracy/"
 dir.create(saveDir, recursive = TRUE, showWarnings = FALSE)
 fileNameAccuDf <- paste0(saveDir, scriptID, "GP_PublicationSummary.rds")
-### Default: redraw from locally supplied archives without fitting models.
-useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", FALSE))
+### Summarize saved fits; set ICBO.rebuildSummaries = FALSE to use a local archive.
+useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", TRUE))
 if (useArchivedResults) {
   archiveFiles <- "data/publicationResults.rds"
   if (!all(file.exists(archiveFiles))) {
-    stop("Publication archives are not distributed with this code-only release. ",
-      "Supply the local archives, or rerun the analysis and set ",
-      "options(ICBO.rebuildSummaries = TRUE); see README.md.", call. = FALSE)
+    stop("Missing local archive: data/publicationResults.rds", call. = FALSE)
   }
   publication <- readRDS("data/publicationResults.rds")
   resDf <- publication$gpAccuracy
@@ -156,20 +153,20 @@ if (useArchivedResults) {
     nIter = 10000L, burnIn = 2000L, thin = 20L)
 }
 
-###### Published predictive-ability panels and their paired comparisons ######
+###### Paired model comparisons ######
 figureGroups <- list(Figure2 = c("Sb", "Gm"), FigureS7 = "Sb", FigureS8 = "Gm")
 comparison <- list()
 for (figure in names(figureGroups)) {
-  pdf(paste0(saveDir, scriptID, figure, "_PredictiveAbility.pdf"), width = 12, height = 9)
   for (h in c(.3, .7)) {
     dat <- resDf[resDf$Crop %in% figureGroups[[figure]] & resDf$h2 == h, ]
-    p <- MakePlot(dat, paste0("Predictive ability / h2 = ", h))
-    print(p)
-    comparison[[length(comparison) + 1L]] <- attr(p, "modelComparison")
+    dat$CVMethod <- factor(dat$CVMethod, levels = c("All", "Once"), labels = c("CV1", "CV2"))
+    dat$Model <- factor(dat$Model)
+    dat$genCor <- factor(dat$genCor)
+    dat$gamma <- factor(dat$gamma)
+    lettersDf <- MakeLettersDf(dat)
+    comparison[[length(comparison) + 1L]] <- attr(lettersDf, "modelComparison")
   }
-  dev.off()
 }
-PlotGeneticCorrelationRecovery(correlationRecovery, saveDir, scriptID)
 attr(resDf, "geneticCorrelationRecovery") <- correlationRecovery
 attr(resDf, "modelComparison") <- bind_rows(comparison)
 saveRDS(resDf, fileNameAccuDf)
