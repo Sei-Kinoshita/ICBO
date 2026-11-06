@@ -1,12 +1,12 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 1. Settings ######
+##### 1.1. Remove objects #####
 rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
-##### 0.2. Load Packages and Functions #####
+##### 1.2. Load Packages and Functions #####
 require(rrBLUP)
 
-##### 0.3. Set scenario parameter #####
+##### 1.3. Set scenario parameter #####
 ### total number of QTNs
 nQTNSb <- 3000
 nQTNGm <- 2000
@@ -22,7 +22,7 @@ h2Vec <- c(0.3, 0.7)
 ### SMA / GMA
 gammaVec <- c(0, 0.2, 0.4)
 
-##### 0.4. Define Parameters #####
+##### 1.4. Define Parameters #####
 scriptID <- "0.3."
 phenotypeDefinition <- "Var(DGE+IGE+SMA)/(Var(DGE+IGE+SMA)+Var(error))"
 
@@ -33,7 +33,7 @@ nRep <- 10
 ### number of seed for sampling phenotype
 nSeed <- length(genCorVec) * length(h2Vec) * length(gammaVec) * nRep
 
-##### 0.5. Define Directories #####
+##### 1.5. Define Directories #####
 dataDir <- "data/"
 genoDir <- paste0(dataDir, "genotype/")
 mrkEffDir <- paste0(dataDir, "trueMrkEff/")
@@ -43,7 +43,7 @@ if (!dir.exists(saveDir)) {
   dir.create(saveDir, recursive = TRUE)
 }
 
-###### 1. Load Data ######
+###### 2. Load Data ######
 ### Genotype Data
 fileNameGenoSb <- paste0(genoDir, "0.1.Sorghum79_geno_Maf_0.1_LD_0.6.rds")
 genoSbMat <- readRDS(file = fileNameGenoSb) - 1
@@ -63,8 +63,8 @@ mrkInfoLst <- list(Sb = mrkInfoSb, Gm = mrkInfoGm)
 
 nChrVec <- c(length(unique(mrkInfoSb$Chr)), length(unique(mrkInfoGm$Chr)))
 
-###### 2. Modify Data ######
-##### 2.1. Calculate GRM (-1/0/1) #####
+###### 3. Modify Data ######
+##### 3.1. Calculate GRM (-1/0/1) #####
 ### sorghum
 fileNameGrmSb <- paste0(genoDir, "0.3.Sb_GRM_AMat_nInd_", nIndVec[1], ".rds")
 if (!file.exists(fileNameGrmSb)) {
@@ -91,7 +91,7 @@ if (!file.exists(fileNameGrmKron)) {
   grmKron <- readRDS(file = fileNameGrmKron)
 }
 
-##### 2.2. for sampling raw SMA #####
+##### 3.2. for sampling raw SMA #####
 fileNameEigKron <- paste0(genoDir, "0.3.Eigen_Kronecker_GRM_AMat_twoCrop.rds")
 if (!file.exists(fileNameEigKron)) {
   eig <- eigen(grmKron, symmetric = TRUE)
@@ -103,7 +103,7 @@ lambda <- eig$values
 Q <- eig$vectors
 lambda[lambda < 0] <- 0
 
-##### 2.3. Fix intercrop pair #####
+##### 3.3. Fix intercrop pair #####
 fileNamePairName <- paste0(saveDir, "0.3.pairNameDf_5214Pair.rds")
 if (!file.exists(fileNamePairName)) {
   ### 5214 pair names (sb1 x gm1 ~ gm66, sb2 x gm1 ~ gm66, ..., same as grmKron)
@@ -118,7 +118,7 @@ if (!file.exists(fileNamePairName)) {
 }
 nPair <- nrow(pairNameDf)
 
-##### 2.4. Parameter Set #####
+##### 3.4. Parameter Set #####
 fileNameParSet <- paste0(saveDir, "0.3.parmeterSet.rds")
 if (!file.exists(fileNameParSet)) {
   parDf <- expand.grid(list(genCorVec, h2Vec, gammaVec, 1:nRep))
@@ -129,7 +129,7 @@ if (!file.exists(fileNameParSet)) {
 }
 nPar <- nrow(parDf)
 
-##### 2.5. Set seed for sampling #####
+##### 3.5. Set seed for sampling #####
 fileNameSeed <- paste0(saveDir, "0.3.seed.rds")
 if (!file.exists(fileNameSeed)) {
   ### New seed generation only; a historical seed file may be supplied locally.
@@ -156,7 +156,7 @@ if (!file.exists(fileNameSeed)) {
 archivePath <- "data/0.2.genotypeEffects_used.rds"
 genotypeEffects <- if (file.exists(archivePath)) readRDS(archivePath) else NULL
 
-###### 3. Generate Phenotype ######
+###### 4. Generate Phenotype ######
 for (genCor in genCorVec) {
   for (h2 in h2Vec) {
     for (gamma in gammaVec) {

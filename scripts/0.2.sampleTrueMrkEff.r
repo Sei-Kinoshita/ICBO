@@ -1,8 +1,8 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 1. Settings ######
+##### 1.1. Remove objects #####
 rm(list = ls())
 
-##### 0.2. Load packages #####
+##### 1.2. Load packages #####
 require(pbmcapply)
 
 ### The optional local archive preserves the manuscript effects; it is not distributed.
@@ -12,7 +12,7 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
   ### Seeds below define new realizations, not the unrecorded historical QTN RNG states.
   qtnSeedBase <- 20261106L
 
-  ##### 0.3. Set scenario parameter #####
+  ##### 1.3. Set scenario parameter #####
   ### total number of QTNs
   nQTNSb <- 3000
   nQTNGm <- 2000
@@ -24,7 +24,7 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
   ### genetic correlation of two traits (DGE and IGE)
   genCorVec <- c(-0.7, -0.1, 0.7)
 
-  ##### 0.4. Define parameters #####
+  ##### 1.4. Define parameters #####
   scriptID <- "0.2."
   ### marker position for tight linkage
   tightLinkThre <- 5
@@ -37,7 +37,7 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
 
   nCores <- 30
 
-  ##### 0.5. Define directories #####
+  ##### 1.5. Define directories #####
   dataDir <- "data/"
   genoDir <- paste0(dataDir, "genotype/")
 
@@ -46,7 +46,7 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
     dir.create(dirMrkEff, recursive = TRUE)
   }
 
-  ###### 1. Load data into R ######
+  ###### 2. Load data into R ######
   ### Genotype Data
   fileNameGenoSb <- paste0(genoDir, "0.1.Sorghum79_geno_Maf_0.1_LD_0.6.rds")
   genoSbMat <- readRDS(file = fileNameGenoSb) - 1
@@ -66,13 +66,11 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
 
   nChrVec <- c(length(unique(mrkInfoSb$Chr)), length(unique(mrkInfoGm$Chr)))
 
-  ###### 2. Generate Marker Effects ######
-  ##### 2.1. Func: sample QTN positions #####
+  ###### 3. Generate Marker Effects ######
+  ##### 3.1. Func: sample QTN positions #####
   SampleQtnPosTightLink <- function(linkageInfoDf, nChr, nQTNEachChr) {
 
     qtnNameEachChrLst <- sapply(X = 1:nChr, FUN = function(chrNo) {
-
-      # chrNo <- 9
 
       nMrkNow <- sum(linkageInfoDf$Chr == chrNo)
       mrkNoNow <- 1:nMrkNow
@@ -140,7 +138,7 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
     return(qtnName2TraitMat)
   }
 
-  ##### 2.2. Generate marker effects #####
+  ##### 3.2. Generate marker effects #####
   for (genCor in genCorVec) {
 
     ### parameters for generic correlation
@@ -199,7 +197,6 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
 
             gvT1 <- genoMat %*% mrkEffTightLinkMat[, 1, drop = FALSE] ### genotypic value
             gvT2 <- genoMat %*% mrkEffTightLinkMat[, 2, drop = FALSE] ### genotypic value
-            # plot(gvT1, gvT2)
 
             genCorNow <- cor(gvT1, gvT2)
             genCorDiff <- abs(genCorNow - genCor)
@@ -207,7 +204,7 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
               loopTightLinkVec <- 1
             } else {
               set.seed(qtnSeedBase + match(genCor, genCorVec) * 10000L + cropNo * 1000L + repNo)
-          loopTightLinkVec <- 0
+              loopTightLinkVec <- 0
             }
           }
 
@@ -218,11 +215,6 @@ if (file.exists("data/0.2.genotypeEffects_used.rds")) {
         saveRDS(object = mrkEffTightLinkLst, file = fileNameMrkEffNow)
       }
       gc(reset = TRUE); gc(reset = TRUE)
-      # lapply(X = mrkEffTightLinkLst, FUN = function(x) {
-      #   gvT1 <- genoMat %*% x[, 1, drop = FALSE] ### genotypic value
-      #   gvT2 <- genoMat %*% x[, 2, drop = FALSE] ### genotypic value
-      #   return(cor(gvT1, gvT2))
-      # })
     }
   }
 

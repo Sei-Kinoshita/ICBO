@@ -1,4 +1,4 @@
-###### 2.1. Summarize Bayesian optimization results ######
+###### 1. Settings ######
 rm(list = ls())
 require(dplyr)
 require(tidyr)
@@ -12,6 +12,7 @@ nIndex <- length(indexName)
 nRep <- nRepBo <- 10L
 nPair <- 5214L
 kappa <- round(qnorm(.95), 2)
+###### 2. Load optimization results ######
 useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", TRUE))
 if (useArchivedResults) {
   archiveFiles <- c("data/publicationResults.rds", "data/2.1.publicationSelection.rds")
@@ -35,7 +36,9 @@ if (useArchivedResults) {
 nPar <- nrow(parSetDf)
 nParUniq <- nrow(unique(parSetDf[c("genCor", "h2", "gamma")]))
 
-###### Cycle-wise advantage and selection summaries ######
+###### 3. Cycle-wise advantage and selection summaries ######
 attr(boIterDf, "cycleAdvantage") <- EvaluateCycleAdvantage(boResLst, parSetDf, nRepBo)
 attr(boIterDf, "selectionMechanism") <- selection
+
+###### 4. Save summaries ######
 saveRDS(boIterDf, paste0(saveDir, scriptID, "BO_PublicationSummary.rds"))

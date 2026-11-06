@@ -1,4 +1,4 @@
-###### 1.2. Summarize genomic prediction results ######
+###### 1. Settings ######
 rm(list = ls())
 require(dplyr)
 require(multcompView)
@@ -8,7 +8,8 @@ scriptID <- "1.2."
 saveDir <- "midstream/1.2.GP_Accuracy/"
 dir.create(saveDir, recursive = TRUE, showWarnings = FALSE)
 fileNameAccuDf <- paste0(saveDir, scriptID, "GP_PublicationSummary.rds")
-### Summarize saved fits; set ICBO.rebuildSummaries = FALSE to use a local archive.
+###### 2. Load prediction results ######
+### Set ICBO.rebuildSummaries = FALSE to use a local archive.
 useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", TRUE))
 if (useArchivedResults) {
   archiveFiles <- "data/publicationResults.rds"
@@ -19,7 +20,7 @@ if (useArchivedResults) {
   resDf <- publication$gpAccuracy
   correlationRecovery <- publication$correlationRecovery
 } else {
-  ### Rebuild after running 0.1-1.1; new MCMC fits need not equal historical fits.
+  ### Read the fits produced by 1.1.GPPred.r.
   nRep <- nCV <- 10L
   cropName <- c("Sb", "Gm")
   modelName <- c("Model1_DGE", "Model2_DGE_IGE", "Model3_GMA_SMA",
@@ -32,7 +33,7 @@ if (useArchivedResults) {
   cvCombLst <- list(All = readRDS("data/selTrainData_GP/0.4.trainData_selCombName_allComb.rds"),
     Once = readRDS("data/selTrainData_GP/0.4.trainData_selCombName_useOnce.rds"))
   cvMethod <- names(cvCombLst)
-  ### plot and calculate accuracy
+  ### Calculate predictive ability
   resDf <- do.call(what = rbind, 
                    args = lapply(X = parNoVec, FUN = function(parNo) {
                      
@@ -153,7 +154,7 @@ if (useArchivedResults) {
     nIter = 10000L, burnIn = 2000L, thin = 20L)
 }
 
-###### Paired model comparisons ######
+###### 3. Paired model comparisons ######
 figureGroups <- list(Figure2 = c("Sb", "Gm"), FigureS7 = "Sb", FigureS8 = "Gm")
 comparison <- list()
 for (figure in names(figureGroups)) {
@@ -167,6 +168,7 @@ for (figure in names(figureGroups)) {
     comparison[[length(comparison) + 1L]] <- attr(lettersDf, "modelComparison")
   }
 }
+###### 4. Save summaries ######
 attr(resDf, "geneticCorrelationRecovery") <- correlationRecovery
 attr(resDf, "modelComparison") <- bind_rows(comparison)
 saveRDS(resDf, fileNameAccuDf)

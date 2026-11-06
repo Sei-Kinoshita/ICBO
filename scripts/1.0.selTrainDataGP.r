@@ -1,13 +1,13 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 1. Settings ######
+##### 1.1. Remove objects #####
 rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
-##### 0.2. Load packages #####
+##### 1.2. Load packages #####
 source("scripts/function_scripts/2.0.function.BO.R")
 
-##### 0.3. Set parameters #####
-scriptID <- "0.4."
+##### 1.3. Set parameters #####
+scriptID <- "0.4." ### Training-set file prefix
 
 cropName <- c("Sb", "Gm")
 
@@ -18,7 +18,7 @@ cv2Seed <- 20260928
 nSbCV1 <- 26 ### number of selected Sb in CV1
 nGmCV1 <- 20 ### number of selected Gm in CV1
 
-##### 0.4. Define directories #####
+##### 1.4. Define directories #####
 dataDir <- "data/"
 genoDir <- paste0(dataDir, "genotype/")
 
@@ -27,10 +27,7 @@ if (!dir.exists(saveDir)) {
   dir.create(saveDir, recursive = TRUE)
 }
 
-
-
-
-###### 1. Load Data ######
+###### 2. Load Data ######
 ### Selected Individuals
 fileNameSelIndLst <- paste0(dataDir, "SelectedIndList_kMedoids_nIndSb_79_nIndGm_66.rds")
 selIndLst <- readRDS(file = fileNameSelIndLst)
@@ -39,14 +36,11 @@ selIndLst <- readRDS(file = fileNameSelIndLst)
 sbName <- selIndLst[["Sb"]]
 gmName <- selIndLst[["Gm"]]
 
-
-
-
-###### 2. Select Training Data ######
-##### 2.1. Design-D: all combinations for selected lines #####
+###### 3. Select Training Data ######
+##### 3.1. Design-D: all combinations for selected lines #####
 fileNameSelCombAll <- paste0(saveDir, scriptID, "trainData_selCombName_allComb.rds")
 if (!file.exists(fileNameSelCombAll)) {
-  ### Historical Design-D sets may be supplied locally; this seed is for new sets only.
+  ### Seed for generating Design-D training sets.
   set.seed(20261106L)
   selCombAllLst <- lapply(X = 1:nCV, FUN = function(cvNo) {
     
@@ -63,11 +57,11 @@ if (!file.exists(fileNameSelCombAll)) {
   selCombAllLst <- readRDS(file = fileNameSelCombAll)
 }
 
-##### 2.2. Design-B: balanced coverage of all lines with unique pairs #####
+##### 3.2. Design-B: balanced coverage of all lines with unique pairs #####
 fileNameSelCombOnce <- paste0(saveDir, scriptID,
                              "trainData_selCombName_useOnce.rds")
 selCombOnceLst <- if (file.exists(fileNameSelCombOnce)) readRDS(fileNameSelCombOnce) else NULL
-### Replace the legacy design under the original filename instead of reusing duplicate pairs.
+### Reuse training sets only when marked as balanced unique pairs.
 if (!identical(attr(selCombOnceLst, "design"), "balanced_unique_pairs")) {
   allCombDf <- expand.grid(Sb = sbName, Gm = gmName, stringsAsFactors = FALSE)
   selCombOnceLst <- lapply(X = 1:nCV, FUN = function(cvNo) {
@@ -86,7 +80,7 @@ if (!identical(attr(selCombOnceLst, "design"), "balanced_unique_pairs")) {
   selCombOnceLst <- readRDS(file = fileNameSelCombOnce)
 }
 
-### Check generated or reused training sets against the CV2 design.
+###### 4. Check training-set size, uniqueness and balance ######
 stopifnot(length(selCombOnceLst) == nCV)
 for (finCombDf in selCombOnceLst) {
   sbCount <- table(factor(finCombDf$Sb, levels = sbName))
@@ -99,5 +93,4 @@ for (finCombDf in selCombOnceLst) {
             all(gmCount >= floor(nComb / length(gmName))),
             all(gmCount <= ceiling(nComb / length(gmName))))
 }
-
 

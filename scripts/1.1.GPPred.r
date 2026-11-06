@@ -1,13 +1,13 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 1. Settings ######
+##### 1.1. Remove objects #####
 rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
-##### 0.2. Load packages #####
+##### 1.2. Load packages #####
 require(BGLR)
 source("scripts/function_scripts/2.0.function.BO.R")
 
-##### 0.3. Set parameters #####
+##### 1.3. Set parameters #####
 scriptID <- "1.1."
 
 cropName <- c("Sb", "Gm")
@@ -24,63 +24,83 @@ nIter <- 10000
 burnIn <- 2000
 thin <- 20
 
-##### 0.4. Define directories #####
+##### 1.4. Define directories #####
 dirData <- "data/"
 dirGeno <- paste0(dirData, "genotype/")
 dirPheno <- paste0(dirData, "phenotype/")
 dirComb <- paste0(dirData, "selTrainData_GP/")
 dirFit <- "midstream/1.0.GP_Fitting/"
+dir.create(dirFit, recursive = TRUE, showWarnings = FALSE)
 
 dirScr <- "midstream/1.1.GP_CV/"
 if (!dir.exists(dirScr)) {
   dir.create(dirScr, recursive = TRUE)
 }
-#### 0.4.1. Model1 directories ####
+#### 1.4.1. Model1 directories ####
 dirM1 <- paste0(dirScr, "Model1_DGE/")
 if (!dir.exists(dirM1)) {
   dir.create(dirM1, recursive = TRUE)
 }
-#### 0.4.2. Model2 directories ####
+#### 1.4.2. Model2 directories ####
 dirM2 <- paste0(dirScr, "Model2_DGE_IGE/")
 if (!dir.exists(dirM2)) {
   dir.create(dirM2, recursive = TRUE)
 }
-#### 0.4.3. Model3 directories ####
+#### 1.4.3. Model3 directories ####
 dirM3 <- paste0(dirScr, "Model3_GMA_SMA/")
 if (!dir.exists(dirM3)) {
   dir.create(dirM3, recursive = TRUE)
 }
-#### 0.4.4. Model4 directories ####
+#### 1.4.4. Model4 directories ####
 dirM4 <- paste0(dirScr, "Model4_Multi_DGE_IGE/")
 if (!dir.exists(dirM4)) {
   dir.create(dirM4, recursive = TRUE)
 }
-#### 0.4.5. Model5 directories ####
+#### 1.4.5. Model5 directories ####
 dirM5 <- paste0(dirScr, "Model5_Multi_GMA_SMA/")
 if (!dir.exists(dirM5)) {
   dir.create(dirM5, recursive = TRUE)
 }
 
-###### 1. Load Data ######
-##### 1.1. Parameter Set #####
+###### 2. Load Data ######
+##### 2.1. Parameter Set #####
 fileNameParSet <- paste0(dirPheno, "0.3.parmeterSet.rds")
 parSetDf <- readRDS(file = fileNameParSet)
 nPar <- nrow(parSetDf)
 parNoVec <- seq_len(nPar)
 
-##### 1.2. Pair Name (fixed order) #####
+##### 2.2. Pair Name (fixed order) #####
 fileNamePairName <- paste0(dirPheno, "0.3.pairNameDf_5214Pair.rds")
 pairNameDf <- readRDS(file = fileNamePairName)
 
-##### 1.3. K matrix #####
+##### 2.3. Genomic kernels #####
 fileNameK1 <- paste0(dirFit, "1.0.Sb_KMat.rds")
 fileNameK2 <- paste0(dirFit, "1.0.Gm_KMat.rds")
 fileNameK3 <- paste0(dirFit, "1.0.GbyG_KMat.rds")
-K1 <- readRDS(file = fileNameK1)
-K2 <- readRDS(file = fileNameK2)
-K3 <- readRDS(file = fileNameK3)
+if (all(file.exists(c(fileNameK1, fileNameK2, fileNameK3)))) {
+  K1 <- readRDS(file = fileNameK1)
+  K2 <- readRDS(file = fileNameK2)
+  K3 <- readRDS(file = fileNameK3)
+} else {
+  grmSb <- readRDS(paste0(dirGeno, "0.3.Sb_GRM_AMat_nInd_79.rds"))
+  grmGm <- readRDS(paste0(dirGeno, "0.3.Gm_GRM_AMat_nInd_66.rds"))
+  grmGbyG <- readRDS(paste0(dirGeno, "0.3.Kronecker_GRM_AMat_twoCrop_nDim_5214.rds"))
+  kernelPairDf <- pairNameDf
+  kernelPairDf$Sb <- factor(kernelPairDf$Sb, levels = rownames(grmSb))
+  kernelPairDf$Gm <- factor(kernelPairDf$Gm, levels = rownames(grmGm))
+  zMatSb <- model.matrix(~Sb - 1, kernelPairDf)
+  zMatGm <- model.matrix(~Gm - 1, kernelPairDf)
+  K1 <- zMatSb %*% grmSb %*% t(zMatSb)
+  K2 <- zMatGm %*% grmGm %*% t(zMatGm)
+  K3 <- grmGbyG
+  saveRDS(K1, fileNameK1)
+  saveRDS(K2, fileNameK2)
+  saveRDS(K3, fileNameK3)
+  rm(grmSb, grmGm, grmGbyG, kernelPairDf, zMatSb, zMatGm)
+}
+gc(reset = TRUE)
 
-##### 1.4. Selected combination for CV #####
+##### 2.4. Selected combination for CV #####
 fileNameSelCombAll <- paste0(dirComb, "0.4.trainData_selCombName_allComb.rds")
 fileNameSelCombOnce <- paste0(dirComb, "0.4.trainData_selCombName_useOnce.rds")
 selCombAllLst <- readRDS(file = fileNameSelCombAll)
@@ -91,7 +111,7 @@ cvCombLst <- list(All = selCombAllLst, Once = selCombOnceLst)
 cvMethod <- c("All", "Once") ### Design-D, Design-B; original file keys retained
 rm(selCombAllLst);rm(selCombOnceLst)
 
-##### 1.5. Start independent R workers (compatible with Positron) #####
+##### 2.5. Start independent R workers (compatible with Positron) #####
 cl <- NULL
 tryCatch({
   cl <- parallel::makePSOCKcluster(nCores)
@@ -104,8 +124,8 @@ tryCatch({
     "gpSeedBase", "CalcPostMeanVar"), envir = environment())
   cat("PSOCK workers ready:", length(cl), "\n")
 
-###### 2. Model1 (only DGE) ######
-##### 2.1. Prediction #####
+###### 3. Model1 (only DGE) ######
+##### 3.1. Prediction #####
 for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 1 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
@@ -186,8 +206,8 @@ for (cvMethodNo in seq_along(cvMethod)) {
   }
 }
 
-###### 3. Model2 (DGE + IGE) ######
-##### 3.1. Prediction #####
+###### 4. Model2 (DGE + IGE) ######
+##### 4.1. Prediction #####
 for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 2 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
@@ -265,8 +285,8 @@ for (cvMethodNo in seq_along(cvMethod)) {
   }
 }
 
-###### 4. Model3 (DGE + IGE + SMA) ######
-##### 4.1. Prediction #####
+###### 5. Model3 (DGE + IGE + SMA) ######
+##### 5.1. Prediction #####
 for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 3 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
@@ -364,8 +384,8 @@ for (cvMethodNo in seq_along(cvMethod)) {
   }
 }
 
-###### 5. Model4 (DGE + IGE + Multitrait) ######
-##### 5.1. Prediction #####
+###### 6. Model4 (DGE + IGE + Multitrait) ######
+##### 6.1. Prediction #####
 for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 4 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
@@ -441,8 +461,8 @@ for (cvMethodNo in seq_along(cvMethod)) {
   }
 }
 
-###### 6. Model5 (DGE + IGE + SMA + Multitrait) ######
-##### 6.1. Prediction #####
+###### 7. Model5 (DGE + IGE + SMA + Multitrait) ######
+##### 7.1. Prediction #####
 for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 5 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")

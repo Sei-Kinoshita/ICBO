@@ -76,9 +76,6 @@ CalcPostMeanVar <- function(yObs, obs_idx, mu_hat,
   return(postRes)
 }
 
-
-
-
 ###### 2. Function to Calculate acquisition function ######
 ###' @param candIdx [vector] name of candidate individual
 ###' @param gBest [scalar] maximum current posterior objective mean over observed pairs (EI/PI)
@@ -104,7 +101,6 @@ cal.AF.BGLR <- function(gBest, candIdx, muCand, sdCand, kappa, ...) {
              UCB = ucb)
 }
 
-
 ###### 3. Batch diagnostics (not used for selection) ######
 BatchDiversity <- function(pairNo, pairDf, grm) {
   batchGrm <- grm[pairNo, pairNo, drop = FALSE]
@@ -118,7 +114,6 @@ BatchDiversity <- function(pairNo, pairDf, grm) {
                mean(apply(distance, 1, min))
              } else NA_real_)
 }
-
 
 ###### 4. Diagnostics for the existing single chain ######
 SingleChainDiagnostics <- function(saveAt, crop, burnIn, thin, essThreshold) {
@@ -136,7 +131,6 @@ SingleChainDiagnostics <- function(saveAt, crop, burnIn, thin, essThreshold) {
                convergencePass = is.finite(ess) && round(ess, 8) >= essThreshold)
   }))
 }
-
 
 ###### 5. CV2-style balanced training pairs ######
 SelectBroadCoverage <- function(pairDf, trainingSize, excludedPairNo = integer(0)) {

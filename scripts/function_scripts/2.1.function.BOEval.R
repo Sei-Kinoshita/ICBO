@@ -1,4 +1,4 @@
-###### Running means from saved parameter draws (no model refitting) ######
+###### 1. Running means from saved parameter draws (no model refitting) ######
 ReadSavedMcmcTrace <- function(path, nColumn = 1L, nIter = 10000L, thin = 20L) {
   values <- scan(path, quiet = TRUE)
   if (length(values) != (nIter / thin) * nColumn || any(!is.finite(values)))
@@ -149,7 +149,7 @@ EvaluateBoRunningMeans <- function(parSetDf, boDir, boRep = 1L, cycles = c(1L, 3
   result
 }
 
-###### Equal-budget paired advantage curves ######
+###### 2. Equal-budget paired advantage curves ######
 EvaluateCycleAdvantage <- function(boResLst, parSetDf, nRepBo = 10L,
     nBootstrap = 10000L, bootstrapSeed = 20261101L) {
   perRun <- bind_rows(lapply(boResLst, function(dat) {
@@ -288,7 +288,7 @@ PlotCycleAdvantage <- function(result, fileName) {
   }
 }
 
-###### Exact paired comparisons for the ten independent phenotype replicates ######
+###### 3. Exact paired comparisons for the ten independent phenotype replicates ######
 ExactPairedWilcoxon <- function(x, y) {
   stopifnot(length(x) == length(y), all(is.finite(x)), all(is.finite(y)))
   ### Remove numerical round-off before identifying zeros and tied absolute differences.
@@ -305,7 +305,7 @@ ExactPairedWilcoxon <- function(x, y) {
   mean(abs(nullSum - center) >= abs(observed - center) - 1e-12)
 }
 
-###### Summary tables for revision diagnostics ######
+###### 4. Read BO selection and run summaries ######
 ReadPublicationSelection <- function(parSetDf, boDir, phenoDir, nRep = 10L, nRepBo = 10L,
     kappa = round(qnorm(.95), 2)) {
   ### Reconstruct Figures 4, 5 and S10 from the original saved fits.
@@ -318,7 +318,7 @@ ReadPublicationSelection <- function(parSetDf, boDir, phenoDir, nRep = 10L, nRep
   mechanismInitialRows <- mechanismExampleRows <- mechanismDiscoveryRows <- list()
   mechanismScenarios <- unique(parSetDf[c('genCor', 'h2', 'gamma')])
 
-  ##### 3.8.1. Saved-fit diagnostics #####
+  ##### 4.1. Saved-fit diagnostics #####
   for (scenarioNo in seq_len(nrow(mechanismScenarios))) {
     scenarioNow <- mechanismScenarios[scenarioNo, ]
     mechanismFocus <- scenarioNow$h2 == mechanismH2 && scenarioNow$gamma == mechanismGamma &&

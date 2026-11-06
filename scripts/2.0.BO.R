@@ -1,13 +1,13 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 1. Settings ######
+##### 1.1. Remove objects #####
 rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
-##### 0.2. Load Packages and Functions #####
+##### 1.2. Load Packages and Functions #####
 require(BGLR)
 source("scripts/function_scripts/2.0.function.BO.R")
 
-##### 0.3. Define Parameters #####
+##### 1.3. Define Parameters #####
 scriptID <- "2.0."
 indexName <- c("Mu", "PI", "EI", "UCB")
 essThreshold <- 400
@@ -35,7 +35,7 @@ thin <- 20
 
 nCore <- 40
 
-##### 0.4. Define Directories #####
+##### 1.4. Define Directories #####
 dataDir <- "data/"
 genoDir <- paste0(dataDir, "genotype/")
 phenoDir <- paste0(dataDir, "phenotype/")
@@ -45,10 +45,7 @@ if (!dir.exists(saveDirM3)) {
   dir.create(saveDirM3, recursive = TRUE)
 }
 
-
-
-
-###### 1. Load Data ######
+###### 2. Load Data ######
 ### K mat (ZGZ^T)
 fileNameKSb <- "midstream/1.0.GP_Fitting/1.0.Sb_KMat.rds"
 fileNameKGm <- "midstream/1.0.GP_Fitting/1.0.Gm_KMat.rds"
@@ -78,10 +75,7 @@ parNoVec <- seq_len(nPar)
 ### Existing Kronecker GRM; distances are computed only for each selected batch.
 grmPair <- K3
 
-
-
-
-###### 2. Prepare for BO ######
+###### 3. Prepare for BO ######
 ### number of iterations for BO
 nIterBo <- floor((nPair - nInitComb) / nPickComb)
 
@@ -140,11 +134,8 @@ if (!file.exists(fileNameBoInitPair) || is.null(attr(initPairNoLst, "byScenario"
   saveRDS(bestInitPairLst, fileNameBoInitPair)
 }
 
-
-
-
-###### 3. Perform BO ######
-##### 3.1. Use Model 3 #####
+###### 4. Perform BO ######
+##### 4.1. Use Model 3 #####
 ### perform BO (change initial value for nRepBo times)
 for (indexNow in indexName) {
 for (boRepNo in 1:nRepBo) {
@@ -159,9 +150,7 @@ for (boRepNo in 1:nRepBo) {
     gamma <- parSetDf$gamma[parNo]
     repNo <- parSetDf$rep[parNo]
     ### for saving BO result
-    ##############'#####################
     dirNow <- paste0(saveDirM3, "parNo_", parNo, "/", indexNow, "/")
-    ##############'#####################
     dirBORes <- paste0(dirNow, "BO_result/")
     if (!dir.exists(dirBORes)) {
       dir.create(dirBORes, recursive = TRUE)
@@ -204,9 +193,7 @@ for (boRepNo in 1:nRepBo) {
         selPairAllIterLst <- c(selPairAllIterLst, list(trainPairNo))
       } else {
         ### pick the next observe individuals
-        ##############'#####################
         newObsDf <- evalDf[order(evalDf[[indexNow]], decreasing = TRUE)[1:nPickComb], ]
-        ##############'#####################
         trainPairNo <- c(trainPairNo, newObsDf$ID)
         ### save observe pair number
         selPairAllIterLst <- c(selPairAllIterLst, list(newObsDf$ID))

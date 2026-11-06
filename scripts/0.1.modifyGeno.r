@@ -1,11 +1,11 @@
-###### 0. Settings ######
+###### 1. Settings ######
 rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
-##### 0.1. Load Packages #####
+##### 1.1. Load Packages #####
 require(gaston)
 
-##### 0.2. Set Parameters #####
+##### 1.2. Set Parameters #####
 scriptID <- "0.1."
 mafThre <- 0.1
 ldThre <- 0.6 ### LD threshold for cutting markers
@@ -13,14 +13,11 @@ ldThre <- 0.6 ### LD threshold for cutting markers
 sbMapRate <- 2.2
 gmMapRate <- 2.5
 
-##### 0.3. Set Directories #####
+##### 1.3. Set Directories #####
 dirSave <- "data/genotype/"
 dir.create(dirSave, recursive = TRUE, showWarnings = FALSE)
 
-
-
-
-###### 1. Genotype panels and selected-accession IDs ######
+###### 2. Genotype panels and selected-accession IDs ######
 ### Locally prepared panels from Takanashi et al. (2022) and Kajiya-Kanegae et al. (2021).
 ### Full-panel MAF/LD filtering and removal of heterozygous markers precede this step.
 selectedFile <- "data/SelectedIndList_kMedoids_nIndSb_79_nIndGm_66.rds"
@@ -35,8 +32,8 @@ selIndLst <- readRDS(selectedFile)
 stopifnot(nrow(genoSbMat) == 237L, nrow(genoGmMat) == 198L,
   length(selIndLst$Sb) == 79L, length(selIndLst$Gm) == 66L)
 
-###### 2. Marker positions and selected panels ######
-##### 2.3. Extract marker position information #####
+###### 3. Marker positions and selected panels ######
+##### 3.1. Extract marker position information #####
 ### sorghum
 sbFilInfoDf <- data.frame(MrkName = colnames(genoSbMat), 
                           Chr = as.numeric(substr(colnames(genoSbMat), start = 4, stop = 5)), 
@@ -52,8 +49,7 @@ gmFilInfoDf$MapDis <- (gmFilInfoDf$Pos / 1e6) * gmMapRate
 gmFirstMrk <- match(unique(gmFilInfoDf$Chr), gmFilInfoDf$Chr) ### first marker for each chr
 gmFilInfoDf$MapDis[gmFirstMrk] <- 0
 
-
-##### 2.4. Filter to Selected individuals #####
+##### 3.2. Filter to Selected individuals #####
 ### sorghum
 genoSelIndSb <- as.matrix(select.snps(x = as.bed.matrix(genoSbMat[selIndLst$Sb, ]), 
                             condition = maf >= mafThre))
@@ -67,10 +63,7 @@ gmSelIndInfoDf <- gmFilInfoDf[gmFilInfoDf$MrkName %in% colnames(genoSelIndGm), ]
 gmSelIndFirstMrk <- match(unique(gmSelIndInfoDf$Chr), gmSelIndInfoDf$Chr) ### first marker for each chr
 gmSelIndInfoDf$MapDis[gmSelIndFirstMrk] <- 0
 
-
-
-
-###### 3. Save ######
+###### 4. Save ######
 ### sorghum
 ### genotype 237 lines
 fileNameFilGenoSb <- paste0(dirSave, scriptID, 

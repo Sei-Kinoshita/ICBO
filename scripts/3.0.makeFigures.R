@@ -1,4 +1,4 @@
-###### Manuscript and supplementary figures ######
+###### Settings ######
 rm(list = ls())
 library(dplyr)
 library(tidyr)
@@ -203,7 +203,6 @@ mechanismAllPlot <- ggplot(mechanismAllDf, aes(Mean, scenario, color = method, s
   mechanismTheme + theme(panel.grid.major.y = element_line(color = 'grey92', linewidth = 0.25),
     panel.spacing.x = grid::unit(1.25, 'cm'))
 
-
 cairo_pdf(paste0(saveDir, scriptID, "Figure4_CommonGPSelection.pdf"), width = 11.5, height = 9.5)
 for (p in mechanismExamplePlots) print(p)
 dev.off()
@@ -322,12 +321,10 @@ mainPlotB <- ggplot(mainContrastDf, aes(x = Mean, y = scenario, color = method, 
   mainTheme + theme(legend.position = "bottom", strip.text = element_text(size = 17),
     panel.spacing.x = grid::unit(1.2, "lines"), panel.grid.major.y = element_line(color = "grey92"))
 
-
 cairo_pdf(paste0(saveDir, scriptID, "FigureS9_Discovery_CycleSavings.pdf"), width = 13, height = 10)
 print(mainPlotAFull + labs(title = "Figure S9a  Optimum discovery"))
 print(mainPlotB)
 dev.off()
-
 
 ###### Figure S1 and S2: PCA, MAF and genomic relationships ######
 scriptID <- "0.1."
@@ -438,7 +435,7 @@ for (cropNo in seq_along(cropName)) {
   gc()
 }
 
-###### 3. Figures S1 and S2 ######
+### Save Figures S1 and S2
 cairo_pdf(paste0(saveDir, scriptID, "FigureS1_PCA.pdf"), width = 12, height = 6)
 grid::grid.newpage()
 grid::pushViewport(grid::viewport(layout = grid::grid.layout(1, 2)))

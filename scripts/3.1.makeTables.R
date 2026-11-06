@@ -1,13 +1,15 @@
-###### Supplementary Tables S1-S3 ######
+###### 1. Settings ######
 rm(list = ls())
 library(dplyr)
+
+###### 2. Load GP and BO summaries ######
 gp <- readRDS("midstream/1.2.GP_Accuracy/1.2.GP_PublicationSummary.rds")
 bo <- readRDS("midstream/2.1.BO_Evaluation/2.1.BO_PublicationSummary.rds")
 parameters <- readRDS("data/phenotype/0.3.parmeterSet.rds")
 dir.create("midstream", showWarnings = FALSE)
 designLabels <- c(All = "Design-D", Once = "Design-B")
 
-### Table S1: average Fisher z within phenotype replicate, then across replicates.
+###### 3. Table S1: average Fisher z within phenotype replicate, then across replicates ######
 gpBlocks <- gp %>% mutate(z = atanh(pmax(pmin(Accuracy, 1 - 1e-7), -1 + 1e-7))) %>%
   group_by(genCor, h2, gamma, CVMethod, Model, rep) %>%
   summarise(z = mean(z), nTrainingRep = n_distinct(CV), nCrops = n_distinct(Crop), .groups = "drop")
@@ -19,7 +21,7 @@ tableS1 <- gpBlocks %>% group_by(genCor, h2, gamma, CVMethod, Model) %>%
   select(genCor, h2, gamma, Design, Model, Mean, SE, nPhenotypeRep, nTrainingRep, nCrops)
 write.csv(tableS1, "midstream/TableS1_PredictiveAbility.csv", row.names = FALSE)
 
-### Table S2: average the ten initial sets within each phenotype replicate.
+###### 4. Table S2: average the ten initial sets within each phenotype replicate ######
 boBlocks <- bo %>% mutate(phenotypeRep = parameters$rep[ParNo]) %>%
   group_by(GenCor, h2, Gamma, Index, phenotypeRep) %>%
   summarise(cycles = mean(nIter), nInitialSetRep = n(), .groups = "drop")
@@ -28,7 +30,7 @@ tableS2 <- boBlocks %>% group_by(GenCor, h2, Gamma, Index) %>%
     nPhenotypeRep = n(), nInitialSetRep = first(nInitialSetRep), .groups = "drop")
 write.csv(tableS2, "midstream/TableS2_BOCycles.csv", row.names = FALSE)
 
-### Table S3: joint multivariate fits are counted once, not once per crop.
+###### 5. Table S3: joint multivariate fits are counted once, not once per crop ######
 uniqueFits <- gp %>% distinct(genCor, h2, gamma, rep, CVMethod, CV, Model, FitCrop, .keep_all = TRUE)
 tableS3GP <- uniqueFits %>% group_by(Model, CVMethod) %>%
   summarise(MeanSeconds = mean(fitPredictionTime), MedianSeconds = median(fitPredictionTime),

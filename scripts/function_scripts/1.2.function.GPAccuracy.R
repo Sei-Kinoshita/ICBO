@@ -1,3 +1,4 @@
+###### 1. Model comparisons ######
 #' Create significance letters for model comparisons
 #'
 #' Average Fisher-z correlations over CV replicates (and crops for pooled plots)
@@ -70,6 +71,7 @@ MakeLettersDf <- function(dat) {
   lettersDf
 }
 
+###### 2. Predictive-ability plots ######
 #' Create a faceted boxplot of accuracy
 #'
 #' Generate a boxplot of `Accuracy` by `CVMethod`, grouped by `Model`,
@@ -111,8 +113,7 @@ MakePlot <- function(dat, plotTitle = NULL) {
   p
 }
 
-
-###### Running means for prediction fits only (1.1) ######
+###### 3. MCMC running means ######
 EvaluateGpRunningMeans <- function(parSetDf, modelDirs, dirGpPred, trainingRep = 1L,
     nIter = 10000L, burnIn = 2000L, thin = 20L) {
   rows <- list()
@@ -166,6 +167,7 @@ EvaluateGpRunningMeans <- function(parSetDf, modelDirs, dirGpPred, trainingRep =
 
 #' Check simulated genotype-level DGE-IGE correlations and multivariate covariance recovery.
 #' Read existing covariance traces only; do not refit models or retain MCMC draws.
+###### 4. Genetic-correlation recovery ######
 EvaluateGeneticCorrelationRecovery <- function(parSetDf, pairNameDf, dirPheno,
     dirGpPred, saveDir, scriptID, cvCombLst,
     nIter = 10000L, burnIn = 2000L, thin = 20L) {
@@ -176,7 +178,7 @@ EvaluateGeneticCorrelationRecovery <- function(parSetDf, pairNameDf, dirPheno,
   meanCorrelation <- function(x) tanh(mean(atanh(x)))
   retained <- seq_len(nIter / thin) * thin > burnIn
 
-  ### Check the recorded script settings without sourcing either fitting script.
+  ### Read MCMC settings without executing the prediction script.
   for (script in "scripts/1.1.GPPred.r") {
     expressions <- parse(script)
     for (parameter in c("nIter", "burnIn", "thin")) {
@@ -357,6 +359,7 @@ EvaluateGeneticCorrelationRecovery <- function(parSetDf, pairNameDf, dirPheno,
     phenotypeMeans = phenotypeDf, summary = recoverySummary)
 }
 
+###### 5. Genetic-correlation plots ######
 PlotGeneticCorrelationRecovery <- function(result, saveDir, scriptID = "1.2.") {
   cropNames <- c(Sb = "Sorghum", Gm = "Soybean")
   designNames <- c(All = "Design-D", Once = "Design-B")
