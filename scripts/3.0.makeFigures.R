@@ -9,7 +9,6 @@ source("scripts/function_scripts/2.1.function.BOEval.R")
 source("scripts/function_scripts/1.2.function.GPAccuracy.R")
 runMCMCChecks <- FALSE
 
-###### Figure 1: BO workflow (manually drawn schematic) ######
 
 ###### Figure 2, S7 and S8: predictive ability ######
 scriptID <- "1.2."
@@ -27,8 +26,6 @@ for (figure in names(figureGroups)) {
 
 ###### Figure S3, S5 and S6: realized and estimated genetic correlations ######
 PlotGeneticCorrelationRecovery(attr(resDf, "geneticCorrelationRecovery"), saveDir, scriptID)
-
-###### Figure S4: training designs (manually drawn schematic) ######
 
 ###### BO figure inputs ######
 scriptID <- "2.1."
