@@ -12,6 +12,8 @@ nIndex <- length(indexName)
 nRep <- nRepBo <- 10L
 nPair <- 5214L
 kappa <- round(qnorm(.95), 2)
+
+
 ###### 2. Load optimization results ######
 useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", TRUE))
 if (useArchivedResults) {
@@ -36,9 +38,11 @@ if (useArchivedResults) {
 nPar <- nrow(parSetDf)
 nParUniq <- nrow(unique(parSetDf[c("genCor", "h2", "gamma")]))
 
+
 ###### 3. Cycle-wise advantage and selection summaries ######
 attr(boIterDf, "cycleAdvantage") <- EvaluateCycleAdvantage(boResLst, parSetDf, nRepBo)
 attr(boIterDf, "selectionMechanism") <- selection
+
 
 ###### 4. Save summaries ######
 saveRDS(boIterDf, paste0(saveDir, scriptID, "BO_PublicationSummary.rds"))
