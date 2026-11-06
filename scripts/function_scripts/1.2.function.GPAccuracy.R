@@ -113,58 +113,6 @@ MakePlot <- function(dat, plotTitle = NULL) {
   p
 }
 
-###### 3. MCMC running means ######
-EvaluateGpRunningMeans <- function(parSetDf, modelDirs, dirGpPred, trainingRep = 1L,
-    nIter = 10000L, burnIn = 2000L, thin = 20L) {
-  rows <- list()
-  for (modelNo in seq_along(modelDirs)) {
-    for (design in c("All", "Once")) {
-      root <- paste0(dirGpPred, modelDirs[modelNo], "/", design, "/CV", trainingRep, "/")
-      for (parNo in McmcExampleScenarios(parSetDf)) {
-        for (crop in if (modelNo <= 3L) c("Sb", "Gm") else "Multitrait") {
-          prefix <- paste0(root, "modelPar/1.1.", crop, "_parNo_", parNo, "_", design, "_CV_", trainingRep, "_")
-          fit <- readRDS(paste0(root, "allRes/1.1.", crop, "_fitting_allRes_parNo_", parNo,
-            "_", design, "_CV_", trainingRep, ".rds"))
-          addTrace <- function(suffix, nColumn, columns, crops, components, expected) {
-            rows[[length(rows) + 1L]] <<- data.frame(trainingDesign = design, Model = paste0("Model", modelNo),
-              ParNo = parNo, h2 = parSetDf$h2[parNo], gamma = parSetDf$gamma[parNo],
-              phenotypeRep = parSetDf$rep[parNo], trainingRep = trainingRep,
-              Crop = crops, component = components, sourceFile = paste0(prefix, suffix),
-              nColumn = nColumn, traceColumn = columns, expectedMean = expected)
-          }
-          if (modelNo <= 3L) {
-            stopifnot(fit$nIter == nIter, fit$burnIn == burnIn, fit$thin == thin)
-            addTrace("varE.dat", 1L, 1L, crop, "Residual variance", fit$varE)
-            if (modelNo == 1L) {
-              addTrace("ETA_GenoRKHS_varU.dat", 1L, 1L, crop, "DGE variance", fit$ETA$GenoRKHS$varU)
-            } else {
-              addTrace("ETA_GenoSb_varU.dat", 1L, 1L, crop,
-                if (crop == "Sb") "DGE variance" else "IGE variance", fit$ETA$GenoSb$varU)
-              addTrace("ETA_GenoGm_varU.dat", 1L, 1L, crop,
-                if (crop == "Gm") "DGE variance" else "IGE variance", fit$ETA$GenoGm$varU)
-              if (modelNo == 3L) addTrace("ETA_GenoGbyG_varU.dat", 1L, 1L, crop,
-                "SMA variance", fit$ETA$GenoGbyG$varU)
-            }
-          } else {
-            addTrace("R.dat", 3L, c(1L, 3L), c("Sb", "Gm"), "Residual variance", diag(fit$resCov$R))
-            for (kernelNo in 1:2) {
-              kernel <- c("GenoSb", "GenoGm")[kernelNo]
-              components <- if (kernelNo == 1L) c("DGE variance", "IGE variance") else
-                c("IGE variance", "DGE variance")
-              addTrace(paste0("Omega_", kernelNo, ".dat"), 3L, c(1L, 3L, 0L),
-                c("Sb", "Gm", c("Sb", "Gm")[kernelNo]), c(components, "DGE-IGE correlation"),
-                c(diag(fit$ETA[[kernel]]$Cov$Omega), NA_real_))
-            }
-            if (modelNo == 5L) addTrace("Omega_3.dat", 3L, c(1L, 3L), c("Sb", "Gm"),
-              "SMA variance", diag(fit$ETA$GenoGbyG$Cov$Omega))
-          }
-        }
-      }
-    }
-  }
-  ReadMcmcRunningMeans(bind_rows(rows), nIter, burnIn, thin)
-}
-
 #' Check simulated genotype-level DGE-IGE correlations and multivariate covariance recovery.
 #' Read existing covariance traces only; do not refit models or retain MCMC draws.
 ###### 4. Genetic-correlation recovery ######

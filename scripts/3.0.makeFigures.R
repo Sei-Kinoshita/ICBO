@@ -7,7 +7,6 @@ library(rrBLUP)
 library(multcompView)
 source("scripts/function_scripts/2.1.function.BOEval.R")
 source("scripts/function_scripts/1.2.function.GPAccuracy.R")
-runMCMCChecks <- FALSE
 
 
 ###### Figure 2, S7 and S8: predictive ability ######
@@ -446,15 +445,3 @@ for (row in 1:3) for (column in 1:2) print(plotLst[[column]][[row]], newpage = F
   vp = grid::viewport(layout.pos.row = row, layout.pos.col = column))
 dev.off()
 
-###### Optional reviewer-response figures: MCMC running means ######
-if (runMCMCChecks) {
-  parameters <- readRDS("data/phenotype/0.3.parmeterSet.rds")
-  modelDirs <- c("Model1_DGE", "Model2_DGE_IGE", "Model3_GMA_SMA",
-    "Model4_Multi_DGE_IGE", "Model5_Multi_GMA_SMA")
-  gp <- EvaluateGpRunningMeans(parameters, modelDirs, "midstream/1.1.GP_CV/")
-  gp$plotData <- filter(gp$plotData, Model == "Model3", trainingDesign == "All")
-  PlotMcmcRunningMeans(gp, "midstream/ResponseFigure1_GP_RunningMeans.pdf", "GP")
-  bo <- EvaluateBoRunningMeans(parameters, "midstream/2.0.BO/Model3_GMA_SMA/", cycles = c(1L, 3L))
-  bo$plotData <- filter(bo$plotData, method == "EI", h2 == .7, gamma == .2)
-  PlotMcmcRunningMeans(bo, "midstream/ResponseFigure2_BO_RunningMeans.pdf", "BO")
-}
