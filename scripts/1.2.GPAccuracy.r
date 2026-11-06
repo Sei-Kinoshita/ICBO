@@ -8,6 +8,8 @@ scriptID <- "1.2."
 saveDir <- "midstream/1.2.GP_Accuracy/"
 dir.create(saveDir, recursive = TRUE, showWarnings = FALSE)
 fileNameAccuDf <- paste0(saveDir, scriptID, "GP_PublicationSummary.rds")
+
+
 ###### 2. Load prediction results ######
 ### Set ICBO.rebuildSummaries = FALSE to use a local archive.
 useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", TRUE))
