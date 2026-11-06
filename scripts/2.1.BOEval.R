@@ -1,802 +1,325 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 2.1. Manuscript Figures 3-5 and Figures S9-S10 ######
 rm(list = ls())
-gc(reset = TRUE);gc(reset = TRUE)
-
-##### 0.2. Load Packages and Functions #####
 require(dplyr)
 require(tidyr)
 require(ggplot2)
-require(pracma)
-require(multcompView)
-
-##### 0.3. Define Parameters #####
+source("scripts/function_scripts/2.0.function.BO.R")
+source("scripts/function_scripts/2.1.function.BOEval.R")
 scriptID <- "2.1."
-
-nRep <- 10
-
-kappa <- round(qnorm(p = 0.95), digits = 2) ### parameter for UCB
-nRepBo <- 10 ### repetition of BO initial value
+saveDir <- "midstream/2.1.BO_Evaluation/"
+dir.create(saveDir, recursive = TRUE, showWarnings = FALSE)
 indexName <- c("Mu", "PI", "EI", "UCB")
 nIndex <- length(indexName)
-
-##### 0.4. Define Directories #####
-dataDir <- "data/"
-phenoDir <- paste0(dataDir, "phenotype/")
-boDir <- "midstream/2.0.BO/Model3_GMA_SMA/"
-
-saveDir <- paste0("midstream/", scriptID, "BO_Evaluation/")
-if (!dir.exists(saveDir)) {
-  dir.create(saveDir, recursive = TRUE)
-}
-
-
-###### 1. Load Data ######
-### scenario parameter set
-fileNameParSet <- paste0(phenoDir, "0.3.parmeterSet.rds")
-parSetDf <- readRDS(file = fileNameParSet)
-nPar <- nrow(parSetDf)
-
-parUniqVec <- (1:nPar) %% 18
-parUniqVec[parUniqVec == 0] <- 18
-nParUniq <- length(unique(parUniqVec))
-
-### initial best value
-fileNameInitBest <- paste0(boDir, "2.0.BO_initPair_bestValue.rds")
-initBestLst <- readRDS(file = fileNameInitBest)
-### initial pair No
-fileNameInitPariNo <- paste0(boDir, "2.0.BO_initPairNoLst.rds")
-initPairNoLst <- readRDS(file = fileNameInitPariNo)
-
-### eigen decomposition of GbyG mat (not ZGZ^T)
-fileNameGbyG <- "data/genotype/0.3.Kronecker_GRM_AMat_twoCrop_nDim_5214.rds"
-gbygMat <- readRDS(file = fileNameGbyG)
-fileNameGbyGEig <- "data/genotype/0.3.Eigen_Kronecker_GRM_AMat_twoCrop.rds"
-eigGbyG <- readRDS(file = fileNameGbyGEig)
-### PCA for GbyG matrix
-pc1 <- eigGbyG$vectors[, 1] * sqrt(eigGbyG$values[1])
-pc2 <- eigGbyG$vectors[, 2] * sqrt(eigGbyG$values[2])
-pcaDf <- data.frame(PC1 = pc1, PC2 = pc2)
-
-### intercrop pair name
-fileNamePairDf <- paste0(phenoDir, "0.3.pairNameDf_5214Pair.rds")
-pairDf <- readRDS(file = fileNamePairDf)
-nPair <- nrow(pairDf)
-pairName <- apply(X = pairDf, MARGIN = 1, FUN = paste0, collapse = "_")
-
-
-
-
-###### 2. Evaluate BO Result ######
-##### 2.1. Best Value for each iteration #####
-fileNameMaxResLst <- paste0(saveDir, scriptID, "BO_allRes_MaxforEachIteartion.rds")
-if (!file.exists(fileNameMaxResLst)) {
-  boResLst <- lapply(X = 1:nParUniq, FUN = function(parUniqNo) {
-    
-    parNoNow <- (1:nPar)[parUniqVec == parUniqNo]
-    
-    oneLst <- lapply(X = parNoNow, FUN = function(no) {
-      
-      ### directory of each index's result
-      parDir <- paste0(boDir, "parNo_", no, "/")
-      muDir <- paste0(parDir, "Mu/BO_result/")
-      piDir <- paste0(parDir, "PI/BO_result/")
-      eiDir <- paste0(parDir, "EI/BO_result/")
-      # ucbDir <- paste0(parDir, "UCB_", kappa, "/BO_result/")
-      ucbDir <- paste0(parDir, "UCB/BO_result/")
-      
-      ### load BO result
-      oneParLst <- lapply(X = 1:nRepBo, FUN = function(boRepNo) {
-        ### each index
-        fileNameBoRes <- paste0("2.0.g_best_allIteration_BORepNo_", boRepNo, ".rds")
-        boResMu <- readRDS(file = paste0(muDir, fileNameBoRes))
-        boResPi <- readRDS(file = paste0(piDir, fileNameBoRes))
-        boResEi <- readRDS(file = paste0(eiDir, fileNameBoRes))
-        boResUcb <- readRDS(file = paste0(ucbDir, fileNameBoRes))
-        len <- c(length(boResMu), length(boResPi), length(boResEi), length(boResUcb))
-        ### to same length (nIter)
-        if (length(unique(len)) != 1) {
-          maxLen <- max(len)
-          boResMu <- c(boResMu, rep(tail(boResMu, 1), maxLen - length(boResMu)))
-          boResPi <- c(boResPi, rep(tail(boResPi, 1), maxLen - length(boResPi)))
-          boResEi <- c(boResEi, rep(tail(boResEi, 1), maxLen - length(boResEi)))
-          boResUcb <- c(boResUcb, rep(tail(boResUcb, 1), maxLen - length(boResUcb)))
-        }
-        ### initial best value
-        initBest <- initBestLst[[boRepNo]][no]
-        ### result for all index
-        bindRes <- rbind(c(initBest, boResMu), c(initBest, boResPi), 
-                         c(initBest, boResEi), c(initBest, boResUcb))
-        nIter <- ncol(bindRes) - 1
-        resDf <- data.frame(bindRes, 
-                            Index = indexName, 
-                            BoRepNo = rep(boRepNo, nIndex), 
-                            ParNo = no)
-        names(resDf) <- c(paste0("Iter_", 0:nIter), "Index", "BoRepNo", "ParNo")
-        
-        return(resDf)
-      })
-      
-      ### match iteration length
-      maxLen <- max(sapply(oneParLst, ncol))
-      for (i in 1:length(oneParLst)) {
-        resDfNow <- oneParLst[[i]]
-        k <- maxLen - ncol(resDfNow)
-        nIter <- ncol(resDfNow) - 3
-        if (k > 0) {
-          fillCol <- resDfNow[, nIter, drop = FALSE]
-          add <- as.data.frame(
-            matrix(rep(as.matrix(fillCol), k), nrow = nrow(resDfNow), ncol = k)
-          )
-          colnames(add) <- paste0("Iter_", 
-                                  (nIter):(nIter - 1 + k))
-          oneParLst[[i]] <- cbind(resDfNow[, 1:(nIter)], 
-                                  add, 
-                                  resDfNow[, (nIter + 1):(nIter + 3)])
-        }
-      }
-      
-      return(do.call(what = rbind, args = oneParLst))
-    })
-    
-    ### match iteration length
-    maxLen <- max(sapply(oneLst, ncol))
-    for (i in 1:length(oneLst)) {
-      resDfNow <- oneLst[[i]]
-      k <- maxLen - ncol(resDfNow)
-      nIter <- ncol(resDfNow) - 3
-      if (k > 0) {
-        fillCol <- resDfNow[, nIter, drop = FALSE]
-        add <- as.data.frame(
-          matrix(rep(as.matrix(fillCol), k), nrow = nrow(resDfNow), ncol = k)
-        )
-        colnames(add) <- paste0("Iter_", 
-                                (nIter):(nIter - 1 + k))
-        oneLst[[i]] <- cbind(resDfNow[, 1:(nIter)], 
-                             add, 
-                             resDfNow[, (nIter + 1):(nIter + 3)])
-      }
-    }
-    
-    return(do.call(what = rbind, args = oneLst))
-  })
-  ### save
-  saveRDS(object = boResLst, file = fileNameMaxResLst)
-} else {
-  boResLst <- readRDS(file = fileNameMaxResLst)
-}
-
-
-##### 2.2. AUC for each scenario and index #####
-boAucLst <- lapply(X = boResLst, FUN = function(oneParDf) {
-  ### number of iterations (include 0)
-  nIterNow <- ncol(oneParDf) - 3
-  maxAllIterMat <- as.matrix(oneParDf[, 1:nIterNow])
-  ### AUC for each scenairo
-  aucNow <- apply(X = maxAllIterMat, MARGIN = 1, FUN = function(maxVal) {
-    endCycle <- which.max(maxVal)
-    trapz(x = 0:(nIterNow - 1), y = maxVal[1:nIterNow])
-  })
-  oneParDf$AUC <- aucNow
-  
-  return(oneParDf[, (ncol(oneParDf) - 3):ncol(oneParDf)])
-})
-
-
-##### 2.3. Number of iteration to the best value #####
-fileNameNiterResLst <- paste0(saveDir, scriptID, "BO_allRes_nIteartion.rds")
-if (!file.exists(fileNameNiterResLst)) {
-  boIterDf <- do.call(what = rbind, args = lapply(X = 1:nPar, FUN = function(parNo) {
-    
-    ### parmeter set
-    genCor <- parSetDf$genCor[parNo]
-    h2 <- parSetDf$h2[parNo]
-    gamma <- parSetDf$gamma[parNo]
-    repNo <- parSetDf$rep[parNo]
-    
-    ### directory of each index's result
-    parDir <- paste0(boDir, "parNo_", parNo, "/")
-    muDir <- paste0(parDir, "Mu/BO_result/")
-    piDir <- paste0(parDir, "PI/BO_result/")
-    eiDir <- paste0(parDir, "EI/BO_result/")
-    # ucbDir <- paste0(parDir, "UCB_", kappa, "/BO_result/")
-    ucbDir <- paste0(parDir, "UCB/BO_result/")
-    
-    ### load BO result
-    oneParDf <- do.call(what = rbind, 
-                        args = oneParLst <- lapply(X = 1:nRepBo, FUN = function(boRepNo) {
-                          ### each index
-                          fileNameBoRes <- paste0("2.0.g_best_allIteration_BORepNo_", boRepNo, ".rds")
-                          boResMu <- readRDS(file = paste0(muDir, fileNameBoRes))
-                          boResPi <- readRDS(file = paste0(piDir, fileNameBoRes))
-                          boResEi <- readRDS(file = paste0(eiDir, fileNameBoRes))
-                          boResUcb <- readRDS(file = paste0(ucbDir, fileNameBoRes))
-                          len <- c(length(boResMu), length(boResPi), 
-                                   length(boResEi), length(boResUcb))
-                          ### output
-                          resDf <- data.frame(nIter = len, Index = indexName, 
-                                              GenCor = genCor, h2 = h2, Gamma = gamma, 
-                                              BoRepNo = boRepNo, ParNo = parNo)
-                          
-                          return(resDf)
-                        }))
-    
-    return(oneParDf)
-  }))
-  ### save
-  saveRDS(object = boIterDf, file = fileNameNiterResLst)
-} else {
-  boIterDf <- readRDS(file = fileNameNiterResLst)
-}
-
-
-
-
-###### 3. Plot ######
-##### 3.1. Selected Pair for each parNo #####
-fileNameGrmPlot <- paste0(saveDir, scriptID, "BORes_GRM_selPairPlot.pdf")
-if (!file.exists(fileNameGrmPlot)) {
-  pdf(file = fileNameGrmPlot, width = 15, height = 12)
-  grmPlotLst <- pbmcapply::pbmclapply(X = 1:nPar, FUN = function(parNo) {
-    
-    # parNo <- 1
-    
-    ### parmeter set
-    genCor <- parSetDf$genCor[parNo]
-    h2 <- parSetDf$h2[parNo]
-    gamma <- parSetDf$gamma[parNo]
-    repNo <- parSetDf$rep[parNo]
-    
-    ### directory of each index's result
-    parDir <- paste0(boDir, "parNo_", parNo, "/")
-    
-    oneParLst <- lapply(X = 1:nRepBo, FUN = function(boRepNo) {
-      
-      # boRepNo <- 1
-      
-      fileNameBoRes <- paste0("2.0.selectedPairNo_allIteration_BORepNo_", boRepNo, ".rds")
-      
-      plotDfLst <- lapply(X = indexName, FUN = function(indexNameNow){
-        
-        indexDirNow <- paste0(parDir, indexNameNow, "/BO_result/")
-        boResNow <- readRDS(file = paste0(indexDirNow, fileNameBoRes))
-        ### unselected pair
-        bgDf <- data.frame(PC1 = pcaDf$PC1, PC2 = pcaDf$PC2,
-                           Index = indexNameNow, Type = "Background",
-                           CycleNo = NA, Size = 0.8)
-        ### initial selected pair
-        initDf <- data.frame(PC1 = pcaDf$PC1[boResNow[[1]]],
-                             PC2 = pcaDf$PC2[boResNow[[1]]],
-                             Index = indexNameNow, Type = "Initial",
-                             CycleNo = 1, Size = 2)
-        ### divide selected pair by cycle number
-        if (length(boResNow) >= 2) {
-          cycleDfLst <- lapply(X = 2:length(boResNow), FUN = function(i){
-            data.frame(PC1 = pcaDf$PC1[boResNow[[i]]],
-                       PC2 = pcaDf$PC2[boResNow[[i]]],
-                       Index = indexNameNow, Type = "Cycle",
-                       CycleNo = i, Size = 2)
-          })
-          outDf <- do.call(rbind, c(list(bgDf, initDf), cycleDfLst))
-        } else {
-          outDf <- rbind(bgDf, initDf)
-        }
-        
-        outDf
-      })
-      plotDf <- do.call(rbind, plotDfLst)
-      plotDf$Index <- factor(plotDf$Index, levels = indexName)
-      
-      ### plot
-      mainTitle <- paste0("genCor: ", genCor, "  h2: ", h2,
-                          "  gamma: ", gamma, "  phenoRep: ", repNo,
-                          "  boRep: ", boRepNo)
-      ggplot() + 
-        geom_point(data = subset(plotDf, Type == "Background"),
-                   aes(x = PC1, y = PC2),
-                   color = "grey85", size = 0.8) +
-        geom_point(data = subset(plotDf, Type == "Initial"),
-                   aes(x = PC1, y = PC2), color = "black", size = 2) +
-        geom_point(data = subset(plotDf, Type == "Cycle"),
-                   aes(x = PC1, y = PC2, color = CycleNo), size = 2, alpha = 0.6) +
-        scale_color_viridis_c() +
-        facet_wrap(~Index, ncol = 2) +
-        labs(x = "PC1", y = "PC2", color = "Cycle", title = mainTitle) +
-        theme_bw() +
-        theme(axis.text = element_text(size = 14),
-              axis.title = element_text(size = 16),
-              plot.title = element_text(size = 16))
-    })
-  }, mc.cores = 30)
-  dev.off()
-}
-
-
-##### 3.2. Change of Best Value #####
-fileNameBoPlot <- paste0(saveDir, scriptID, "BORes_CompareIndex_plot.pdf")
-if (!file.exists(fileNameBoPlot)) {
-  pdf(file = fileNameBoPlot, width = 15, height = 12)
-  lapply(X = 1:length(boResLst), FUN = function(resNo) {
-    
-    df <- boResLst[[resNo]]
-    df$Index <- factor(df$Index, levels = indexName)
-    
-    timeCols <- grep("^Iter_\\d+$", names(df), value = TRUE)
-    timeCols <- timeCols[order(as.integer(sub("^Iter_", "", timeCols)))]
-    timeVec <- sort(as.integer(sub("^Iter_", "", timeCols)))
-    
-    long <- df %>%
-      pivot_longer(cols = all_of(timeCols), names_to = "Iter", values_to = "y")
-    ### mean over all ParRep and BoRep
-    meanDf <- long %>%
-      group_by(Index, ParNo, Iter) %>%
-      summarise(m_par = mean(y, na.rm = TRUE), .groups = "drop") %>%
-      group_by(Index, Iter) %>%
-      summarise(mean = mean(m_par, na.rm = TRUE), .groups = "drop")
-    ### for error bar over all ParRep and BoRep
-    errDf <- long %>%
-      group_by(Index, Iter) %>%
-      summarise(
-        se = sd(y, na.rm = TRUE) / sqrt(sum(!is.na(y))),
-        .groups = "drop"
-      )
-    ### bind for plot
-    sumDf <- meanDf %>%
-      left_join(errDf, by = c("Index", "Iter")) %>%
-      # mutate(Iter = factor(Iter, levels = timeCols))
-      mutate(Iter = as.integer(sub("^Iter_", "", Iter)),
-             Iter = factor(Iter, levels = timeVec))
-    ### plot
-    plotTitle <- paste0("genCor: ", parSetDf[resNo, 1], 
-                        " h2: ", parSetDf[resNo, 2], 
-                        " gamma: ", parSetDf[resNo, 3])
-    g <- ggplot(sumDf, aes(Iter, mean, color = Index, group = Index)) +
-      geom_line(linewidth = 1.7) +
-      geom_point(size = 2) +
-      geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.5) +
-      scale_x_discrete(breaks = timeVec, labels = timeVec) + 
-      labs(title = plotTitle, y = "Best Value") + 
-      theme_bw() +
-      theme(axis.text.y = element_text(size = 20), 
-            axis.text.x = element_text(angle = 60, hjust = 1, size = 18))
-    print(g)
-    
-    return(NULL)
-  })
-  dev.off()
-}
-
-
-##### 3.3. AUC for each scenario #####
-fileNameAucPlot <- paste0(saveDir, scriptID, "BORes_AUC_CompareIndex_plot.pdf")
-if (!file.exists(fileNameAucPlot)) {
-  pdf(file = fileNameAucPlot, width = 15, height = 12)
-  fileNameFrdRes <- paste0(saveDir, scriptID, "BORes_AUC_Friedman_Wilcoxon_test.txt")
-  txtPath <- file(fileNameFrdRes, open = "wt")
-  lapply(X = 1:length(boAucLst), FUN = function(resNo) {
-    
-    oneParDf <- boAucLst[[resNo]]
-    oneParDf$Index <- factor(oneParDf$Index, levels = indexName)
-    
-    # ### mean AUC for each parameter
-    # meanAuc <- tapply(X = oneParDf$AUC, INDEX = oneParDf$Index, FUN = mean)
-    
-    ### statistical test
-    ### Friedman test for AUC for each index
-    modiData <- data.frame(Index = oneParDf$Index, AUC = oneParDf$AUC, 
-                           Rep = rep(1:(nrow(oneParDf) / 4), each = 4))
-    frdRes <- friedman.test(AUC ~ Index | Rep, data = modiData)
-    
-    ### Wilcoxon test for each index pair
-    wideDat <- matrix(oneParDf$AUC, ncol = nIndex, byrow = TRUE)
-    colnames(wideDat) <- indexName
-    wideDat <- as.data.frame(wideDat)
-    pVals <- c(
-      wilcox.test(wideDat$Mu, wideDat$PI, paired = TRUE, exact = FALSE)$p.value, 
-      wilcox.test(wideDat$Mu, wideDat$EI, paired = TRUE, exact = FALSE)$p.value, 
-      wilcox.test(wideDat$Mu, wideDat$UCB, paired = TRUE, exact = FALSE)$p.value, 
-      wilcox.test(wideDat$PI, wideDat$EI, paired = TRUE, exact = FALSE)$p.value, 
-      wilcox.test(wideDat$PI, wideDat$UCB, paired = TRUE, exact = FALSE)$p.value, 
-      wilcox.test(wideDat$EI, wideDat$UCB, paired = TRUE, exact = FALSE)$p.value
-    )
-    pValAdj <- p.adjust(pVals, method = "bonferroni")
-    pValAdjRes <- data.frame(Pair = c("Mu_PI", "Mu_EI", "Mu_UCB", "PI_EI", "PI_UCB", "EI_UCB"), 
-                             pAdj = pValAdj)
-    
-    ### add letters
-    names(pValAdj) <- c("Mu-PI", "Mu-EI", "Mu-UCB", "PI-EI", "PI-UCB", "EI-UCB")
-    letVec <- multcompView::multcompLetters(pValAdj, threshold = 0.05)$Letters
-    ypos <- tapply(oneParDf$AUC, oneParDf$Index, max, na.rm = TRUE)
-    gap <- 0.05 * diff(range(oneParDf$AUC, na.rm = TRUE))
-    labDf <- data.frame(Index = factor(names(letVec), levels = indexName),
-                        Lab = letVec,
-                        Y = ypos[names(letVec)] + gap)
-    
-    ### plot
-    plotTitle <- paste0("genCor: ", parSetDf[resNo, 1], 
-                        " h2: ", parSetDf[resNo, 2], 
-                        " gamma: ", parSetDf[resNo, 3])
-    
-    g <- ggplot(data = oneParDf, aes(x = Index, y = AUC, fill = Index)) + 
-      geom_boxplot() + 
-      geom_text(data = labDf, aes(x = Index, y = Y, label = Lab),
-                inherit.aes = FALSE, size = 6) + 
-      expand_limits(y = max(labDf$Y) + gap) + 
-      labs(title = plotTitle) + 
-      theme_bw() + 
-      theme(text = element_text(size = 17))
-    print(g)
-    
-    out <- c(
-      plotTitle, "", 
-      "=== Friedman test ===", 
-      capture.output(print(frdRes)), 
-      "", 
-      "=== Pairwise comparison by Wilcoxon", 
-      capture.output(print(pValAdjRes)), 
-      ""
-    )
-    
-    writeLines(out, txtPath)
-  })
-  close(txtPath)
-  dev.off()
-}
-
-
-##### 3.4. Mean Number of BO cycles #####
-boIterDf$GenCor <- factor(boIterDf$GenCor)
-boIterDf$h2 <- factor(boIterDf$h2)
-boIterDf$Gamma <- factor(boIterDf$Gamma)
-boIterDf$Index <- factor(boIterDf$Index, levels = c("Mu", "PI", "EI", "UCB"))
-# ######################
-# boIterDf$nIter <- 47.054 - boIterDf$nIter
-# ######################
-# boIterDf$Speed <- 1 / (boIterDf$nIter)
-# boIterDf$Speed <- 47.054 / boIterDf$nIter
-
-### mean iteration each parNo
-fileNameBoIterPlot <- paste0(saveDir, scriptID, "BOnIter_CompareIndex_plot.pdf")
-pdf(file = fileNameBoIterPlot, width = 15, height = 10)
-meanIterDf <- sapply(X = 1:nParUniq, FUN = function(parUniqNo) {
-  ### combine same parameter set
-  parUniqNoNow <- which(parUniqVec == parUniqNo)
-  ### parmeter set
-  genCor <- parSetDf$genCor[parUniqNoNow[1]]
-  h2 <- parSetDf$h2[parUniqNoNow[1]]
-  gamma <- parSetDf$gamma[parUniqNoNow[1]]
-  
-  ### plot
-  plotDf <- boIterDf[boIterDf$ParNo %in% parUniqNoNow, ]
-  
-  plotTitle <- paste0("genCor: ", plotDf$GenCor[1], " h2: ", plotDf$h2[1],
-                      " gamma: ", plotDf$Gamma[1])
-  meanIter <- tapply(X = plotDf$nIter, INDEX = plotDf$Index, FUN = mean)
-  
-  ### statistical test
-  repid <- sort(unique(plotDf$ParNo))
-  blkdf <- do.call(what = rbind, args = lapply(X = 1:nRepBo, FUN = function(bono) {
-    tmp <- plotDf[plotDf$BoRepNo == bono, c("ParNo", "Index", "nIter")]
-    tmp$Rep <- match(tmp$ParNo, repid) + (bono - 1) * length(repid)
-    tmp
-  }))
-  frdres <- friedman.test(nIter ~ Index | Rep, data = blkdf)
-  
-  widedat <- reshape(blkdf[, c("Rep", "Index", "nIter")],
-                     idvar = "Rep", timevar = "Index", direction = "wide")
-  names(widedat) <- sub("^nIter\\.", "", names(widedat))
-  pvals <- c(
-    wilcox.test(widedat$Mu, widedat$PI, paired = TRUE, exact = FALSE)$p.value,
-    wilcox.test(widedat$Mu, widedat$EI, paired = TRUE, exact = FALSE)$p.value,
-    wilcox.test(widedat$Mu, widedat$UCB, paired = TRUE, exact = FALSE)$p.value,
-    wilcox.test(widedat$PI, widedat$EI, paired = TRUE, exact = FALSE)$p.value,
-    wilcox.test(widedat$PI, widedat$UCB, paired = TRUE, exact = FALSE)$p.value,
-    wilcox.test(widedat$EI, widedat$UCB, paired = TRUE, exact = FALSE)$p.value
-  )
-  padj <- p.adjust(pvals, method = "bonferroni")
-  names(padj) <- c("Mu-PI", "Mu-EI", "Mu-UCB", "PI-EI", "PI-UCB", "EI-UCB")
-  letvec <- multcompView::multcompLetters(padj, threshold = 0.05)$Letters
-  ypos <- tapply(plotDf$nIter, plotDf$Index, max, na.rm = TRUE)
-  gap <- 0.05 * diff(range(plotDf$nIter, na.rm = TRUE))
-  if (gap == 0) {
-    gap <- 0.5
+nRep <- nRepBo <- 10L
+nPair <- 5214L
+kappa <- round(qnorm(.95), 2)
+useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", FALSE))
+if (useArchivedResults) {
+  archiveFiles <- c("data/publicationResults.rds", "data/2.1.publicationSelection.rds")
+  if (!all(file.exists(archiveFiles))) {
+    stop("Publication archives are not distributed with this code-only release. ",
+      "Supply the local archives, or rerun the analysis and set ",
+      "options(ICBO.rebuildSummaries = TRUE); see README.md.", call. = FALSE)
   }
-  labdf <- data.frame(Index = factor(names(letvec), levels = indexName),
-                      Lab = letvec,
-                      Y = ypos[names(letvec)] + gap)
-  
-  g <- ggplot(data = plotDf, aes(x = Index, y = nIter, fill = Index)) +
-    geom_boxplot() +
-    geom_text(data = labdf, aes(x = Index, y = Y, label = Lab),
-              inherit.aes = FALSE, size = 6) +
-    expand_limits(y = max(labdf$Y) + gap) +
-    labs(title = plotTitle, y = "# of iterations")
-  print(g)
-  
-  return(meanIter)
-})
-colnames(meanIterDf) <- paste0("ParNo_", 1:18)
-
-### mean iteration each scenario
-ggplot(data = boIterDf, aes(x = Index, y = nIter, fill = h2)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  facet_wrap(~GenCor)
-
-ggplot(data = boIterDf, aes(x = Index, y = nIter, fill = GenCor)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  facet_wrap(~h2)
-
-ggplot(data = boIterDf, aes(x = Index, y = nIter, fill = h2)) +
-  geom_bar(stat = "identity", position = "dodge")
-
-ggplot(data = boIterDf, aes(x = Index, y = nIter, fill = Gamma)) +
-  geom_bar(stat = "identity", position = "dodge")
-
-ggplot(data = boIterDf, aes(x = Index, y = nIter, fill = GenCor)) +
-  geom_bar(stat = "identity", position = "dodge")
-
-### 9 cells barplot
-ggplot(data = boIterDf, aes(x = h2, y = nIter, fill = Index)) +
-  stat_summary(fun = mean,
-               geom = "bar",
-               position = position_dodge(width = 0.9)) +
-  stat_summary(fun.data = mean_se,
-               geom = "errorbar",
-               position = position_dodge(width = 0.9),
-               width = 0.2) +
-  facet_grid(GenCor ~ Gamma) +
-  theme_bw() +
-  theme(axis.text.x = element_text(size = 17),
-        axis.text.y = element_text(size = 17),
-        strip.text = element_text(size = 17))
-
-### 9 cells barplot + letters
-plotDf <- boIterDf
-plotDf$GenCor <- factor(plotDf$GenCor, levels = sort(unique(plotDf$GenCor)))
-plotDf$Gamma  <- factor(plotDf$Gamma,  levels = sort(unique(plotDf$Gamma)))
-plotDf$h2     <- factor(plotDf$h2,     levels = sort(unique(plotDf$h2)))
-plotDf$Index  <- factor(plotDf$Index,  levels = indexName)
-
-### summary for barplot
-sumDf <- aggregate(nIter ~ GenCor + Gamma + h2 + Index,
-                   data = plotDf,
-                   FUN = mean)
-seDf <- aggregate(nIter ~ GenCor + Gamma + h2 + Index,
-                  data = plotDf,
-                  FUN = function(x) sd(x) / sqrt(length(x)))
-names(sumDf)[names(sumDf) == "nIter"] <- "Mean"
-names(seDf)[names(seDf) == "nIter"] <- "SE"
-sumDf <- merge(sumDf, seDf,
-               by = c("GenCor", "Gamma", "h2", "Index"),
-               sort = FALSE)
-
-### --------------------------------
-### statistical letters for each cell
-### cell = one GenCor x Gamma x h2
-### --------------------------------
-labDf <- do.call(rbind, lapply(X = split(plotDf,
-                                         list(plotDf$GenCor, plotDf$Gamma, plotDf$h2),
-                                         drop = TRUE),
-                               FUN = function(datNow) {
-                                 
-                                 datNow$Index <- factor(datNow$Index, levels = indexName)
-                                 
-                                 ### block for paired test:
-                                 ### one block = same phenotype replicate (ParNo) and BO replicate (BoRepNo)
-                                 repid <- sort(unique(datNow$ParNo))
-                                 blkdf <- do.call(rbind, lapply(X = 1:nRepBo, FUN = function(bono) {
-                                   tmp <- datNow[datNow$BoRepNo == bono, c("ParNo", "Index", "nIter")]
-                                   tmp$Rep <- match(tmp$ParNo, repid) + (bono - 1) * length(repid)
-                                   tmp
-                                 }))
-                                 
-                                 ### Friedman test
-                                 frdres <- friedman.test(nIter ~ Index | Rep, data = blkdf)
-                                 
-                                 ### paired Wilcoxon
-                                 widedat <- reshape(blkdf[, c("Rep", "Index", "nIter")],
-                                                    idvar = "Rep", timevar = "Index", direction = "wide")
-                                 names(widedat) <- sub("^nIter\\.", "", names(widedat))
-                                 
-                                 pvals <- c(
-                                   wilcox.test(widedat$Mu,  widedat$PI,  paired = TRUE, exact = FALSE)$p.value,
-                                   wilcox.test(widedat$Mu,  widedat$EI,  paired = TRUE, exact = FALSE)$p.value,
-                                   wilcox.test(widedat$Mu,  widedat$UCB, paired = TRUE, exact = FALSE)$p.value,
-                                   wilcox.test(widedat$PI,  widedat$EI,  paired = TRUE, exact = FALSE)$p.value,
-                                   wilcox.test(widedat$PI,  widedat$UCB, paired = TRUE, exact = FALSE)$p.value,
-                                   wilcox.test(widedat$EI,  widedat$UCB, paired = TRUE, exact = FALSE)$p.value
-                                 )
-                                 padj <- p.adjust(pvals, method = "bonferroni")
-                                 names(padj) <- c("Mu-PI", "Mu-EI", "Mu-UCB", "PI-EI", "PI-UCB", "EI-UCB")
-                                 
-                                 letvec <- multcompView::multcompLetters(padj, threshold = 0.05)$Letters
-                                 
-                                 ### y position
-                                 ymaxDf <- sumDf[sumDf$GenCor == datNow$GenCor[1] &
-                                                   sumDf$Gamma  == datNow$Gamma[1] &
-                                                   sumDf$h2     == datNow$h2[1], ]
-                                 ypos <- ymaxDf$Mean + ymaxDf$SE
-                                 names(ypos) <- as.character(ymaxDf$Index)
-                                 
-                                 gap <- 0.05 * diff(range(plotDf$nIter, na.rm = TRUE))
-                                 if (gap == 0) {
-                                   gap <- 0.3
-                                 }
-                                 
-                                 outDf <- data.frame(GenCor = datNow$GenCor[1],
-                                                     Gamma  = datNow$Gamma[1],
-                                                     h2     = datNow$h2[1],
-                                                     Index  = factor(names(letvec), levels = indexName),
-                                                     Lab    = letvec,
-                                                     Y      = ypos[names(letvec)] + gap)
-                                 
-                                 return(outDf)
-                               }))
-
-### x position for letters
-h2Lev <- levels(plotDf$h2)
-idxLev <- levels(plotDf$Index)
-nIdx <- length(idxLev)
-dodgeWidth <- 0.9
-
-labDf$x <- NA
-for (i in 1:nrow(labDf)) {
-  h2Pos <- match(as.character(labDf$h2[i]), h2Lev)
-  idxPos <- match(as.character(labDf$Index[i]), idxLev)
-  labDf$x[i] <- h2Pos + ((idxPos - (nIdx + 1) / 2) / nIdx) * dodgeWidth
+  publication <- readRDS("data/publicationResults.rds")
+  parSetDf <- publication$parameters
+  boResLst <- publication$boCurves
+  boIterDf <- publication$boCounts
+  selection <- readRDS("data/2.1.publicationSelection.rds")
+} else {
+  parSetDf <- readRDS("data/phenotype/0.3.parmeterSet.rds")
+  boDir <- "midstream/2.0.BO/Model3_GMA_SMA/"
+  rebuilt <- ReadPublicationBoResults(parSetDf, boDir, nRepBo)
+  boResLst <- rebuilt$curves
+  boIterDf <- rebuilt$counts
+  selection <- ReadPublicationSelection(parSetDf, boDir, "data/phenotype/", nRep, nRepBo, kappa)
 }
+nPar <- nrow(parSetDf)
+nParUniq <- nrow(unique(parSetDf[c("genCor", "h2", "gamma")]))
 
-### plot
-ggplot(data = sumDf, aes(x = h2, y = Mean, fill = Index)) +
-  geom_bar(stat = "identity",
-           position = position_dodge(width = dodgeWidth)) +
-  geom_errorbar(aes(ymin = Mean - SE, ymax = Mean + SE),
-                position = position_dodge(width = dodgeWidth),
-                width = 0.2) +
-  geom_text(data = labDf,
-            aes(x = x, y = Y, label = Lab),
-            inherit.aes = FALSE,
-            size = 5) +
-  facet_grid(GenCor ~ Gamma) +
-  theme_bw() +
-  theme(axis.text.x = element_text(size = 17),
-        axis.text.y = element_text(size = 17),
-        axis.title = element_text(size = 17),
-        strip.text = element_text(size = 17),
-        legend.text = element_text(size = 15),
-        legend.title = element_text(size = 16)) +
-  labs(x = expression(h^2),
-       y = "# of iterations")
+###### Figure 3: cycle-wise paired best-value advantage ######
+cycleAdvantage <- EvaluateCycleAdvantage(boResLst, parSetDf, nRepBo)
+PlotCycleAdvantage(cycleAdvantage, paste0(saveDir, scriptID, "Figure3_CycleAdvantage.pdf"))
+attr(boIterDf, "cycleAdvantage") <- cycleAdvantage
 
+###### Figure S9: conditional random reference and paired cycle savings ######
+mainRunDf <- boIterDf %>% transmute(genCor = GenCor, h2 = h2, gamma = Gamma,
+  phenotypeRep = parSetDf$rep[ParNo], ParNo = ParNo, method = Index, boRep = BoRepNo,
+  nCycles = nIter, nEvaluatedPair = pmin(56L * nIter, nPair))
+mainMethodNames <- c("Random", indexName)
+stopifnot(nrow(mainRunDf) == 7200L, all(attr(boIterDf, "runTiming")$optimumFound))
+mainPhenotypeDf <- mainRunDf %>%
+  group_by(genCor, h2, gamma, phenotypeRep, ParNo, method) %>%
+  summarise(meanCycles = mean(nCycles),
+    nInitialSetRep = n(), .groups = "drop")
+stopifnot(all(mainPhenotypeDf$nInitialSetRep == nRepBo))
+
+### Evaluate empirical GP discovery rates and the analytical Random reference at identical batch budgets.
+### Balanced run counts give equal weight to the 18 scenarios and to their phenotype replicates.
+mainRunCounts <- mainRunDf %>% count(genCor, h2, gamma, method)
+stopifnot(nrow(mainRunCounts) == nParUniq * nIndex,
+  all(mainRunCounts$n == nRep * nRepBo))
+mainBudgetVec <- sort(unique(c(0L, seq(56L, nPair, by = 56L), nPair)))
+mainDiscoveryDf <- bind_rows(lapply(indexName, function(methodNow) {
+  completedAt <- mainRunDf$nEvaluatedPair[mainRunDf$method == methodNow]
+  data.frame(method = methodNow, evaluatedPairs = mainBudgetVec,
+    discoveryPercent = 100 * vapply(mainBudgetVec, function(budget) {
+      mean(completedAt <= budget)
+    }, numeric(1)))
+}))
+### The unique optimum is excluded from the initial 56 pairs. Its rank among the
+### remaining pairs is uniform under sampling without replacement. Include the final partial batch.
+mainInitialPairs <- mainBatchSize <- 56L
+mainRemainingPairs <- nPair - mainInitialPairs
+stopifnot(mainRemainingPairs > 0)
+mainRandomExpectedCycles <- 1 + mean(ceiling(seq_len(mainRemainingPairs) / mainBatchSize))
+mainRandomDiscoveryDf <- data.frame(method = "Random", evaluatedPairs = mainBudgetVec,
+  discoveryPercent = 100 * pmin(pmax(mainBudgetVec - mainInitialPairs, 0) / mainRemainingPairs, 1))
+mainDiscoveryDf <- bind_rows(mainRandomDiscoveryDf, mainDiscoveryDf)
+mainDiscoveryDf$method <- factor(mainDiscoveryDf$method, levels = mainMethodNames)
+
+### Match methods within phenotype replicate before estimating mean cycle savings and intervals.
+mainMuDf <- mainPhenotypeDf %>% filter(method == "Mu") %>%
+  select(genCor, h2, gamma, phenotypeRep, ParNo, muMeanCycles = meanCycles)
+mainPairedDf <- mainPhenotypeDf %>% filter(method %in% setdiff(indexName, "Mu")) %>%
+  inner_join(mainMuDf, by = c("genCor", "h2", "gamma", "phenotypeRep", "ParNo")) %>%
+  mutate(cyclesSaved = muMeanCycles - meanCycles)
+mainContrastDf <- mainPairedDf %>%
+  group_by(genCor, h2, gamma, method) %>%
+  summarise(Mean = mean(cyclesSaved), SE = sd(cyclesSaved) / sqrt(n()),
+    nPhenotypeRep = n(), .groups = "drop") %>%
+  mutate(CILower = ifelse(SE > 0, Mean - qt(0.975, nPhenotypeRep - 1) * SE, NA_real_),
+    CIUpper = ifelse(SE > 0, Mean + qt(0.975, nPhenotypeRep - 1) * SE, NA_real_))
+stopifnot(nrow(mainContrastDf) == nParUniq * (nIndex - 1L),
+  all(mainContrastDf$nPhenotypeRep == nRep))
+
+mainColors <- c(Random = "grey40", setNames(scales::hue_pal()(nIndex), indexName))
+mainLineTypes <- c(Random = "longdash", Mu = "solid", PI = "dashed", EI = "dotted", UCB = "dotdash")
+mainMethodLabels <- c(Random = "Random (analytical)", setNames(indexName, indexName))
+mainScenarioLabels <- mainContrastDf %>% distinct(genCor, gamma) %>% arrange(genCor, gamma) %>%
+  mutate(label = sprintf("rho == %.1f ~ ',' ~ gamma == %.1f", genCor, gamma))
+mainContrastDf <- mainContrastDf %>%
+  mutate(scenario = factor(sprintf("rho == %.1f ~ ',' ~ gamma == %.1f", genCor, gamma),
+                          levels = rev(mainScenarioLabels$label)),
+    h2 = factor(h2, levels = c(0.3, 0.7)), method = factor(method, levels = setdiff(indexName, "Mu")))
+mainTheme <- theme_bw(base_size = 16) +
+  theme(plot.title = element_text(face = "bold", size = 19),
+    plot.subtitle = element_text(size = 14, margin = margin(b = 10)),
+    axis.title = element_text(size = 18), axis.text = element_text(size = 16),
+    axis.ticks = element_line(linewidth = 0.6), panel.border = element_rect(linewidth = 0.7),
+    panel.grid.major = element_line(linewidth = 0.3, color = "grey90"),
+    panel.grid.minor = element_blank(), legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16), legend.key.width = grid::unit(1.8, "cm"),
+    plot.caption = element_text(size = 11, hjust = 0, lineheight = 1.15),
+    plot.margin = margin(12, 18, 10, 12))
+
+mainPlotABase <- ggplot(mainDiscoveryDf,
+  aes(evaluatedPairs, discoveryPercent, color = method, linetype = method, group = method)) +
+  geom_step(linewidth = 1, direction = "hv") +
+  scale_color_manual(values = mainColors, breaks = mainMethodNames, labels = mainMethodLabels, drop = FALSE) +
+  scale_linetype_manual(values = mainLineTypes, breaks = mainMethodNames, labels = mainMethodLabels, drop = FALSE) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, by = 20),
+    labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0.015, 0.025))) +
+  labs(x = "Evaluated pairs", y = "Optimum discovery rate", color = "Method", linetype = "Method") +
+  mainTheme + theme(legend.position = "bottom")
+mainPlotAFull <- mainPlotABase +
+  scale_x_continuous(breaks = c(0, 1000, 2000, 3000, 4000, nPair),
+    labels = scales::label_comma(), expand = expansion(mult = c(0, 0.015))) +
+  labs(title = "A  Optimum discovery at a common evaluation budget",
+    subtitle = "Full range: empirical GP discovery rates and an analytical Random reference") +
+  theme(legend.position = "bottom")
+mainDodge <- position_dodge(width = 0.65, orientation = "y", reverse = TRUE)
+mainPlotB <- ggplot(mainContrastDf, aes(x = Mean, y = scenario, color = method, group = method)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.75) +
+  geom_errorbar(aes(xmin = CILower, xmax = CIUpper), orientation = "y",
+    position = mainDodge, width = 0.16, linewidth = 0.8, na.rm = TRUE) +
+  geom_point(aes(shape = method), position = mainDodge, size = 3.4) +
+  scale_color_manual(values = mainColors, breaks = setdiff(indexName, "Mu")) +
+  scale_shape_manual(values = c(PI = 16, EI = 17, UCB = 15)) +
+  scale_y_discrete(labels = function(x) parse(text = x), expand = expansion(add = 0.6)) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 6)) +
+  facet_wrap(vars(h2), nrow = 1,
+    labeller = label_bquote(h^2 == .(as.numeric(as.character(h2))))) +
+  labs(title = "Figure S9b  Cycles saved relative to Mu",
+    subtitle = "Positive values favor the acquisition method; all 18 scenarios are shown",
+    x = "Cycles saved relative to Mu", y = NULL, color = "Method", shape = "Method",
+    caption = paste0("Paired mean differences and pointwise 95% t intervals across 10 phenotype replicates; 10 initial-set runs averaged within replicate.\n",
+      "Initial batch = cycle 1; 56 pairs per cycle. Scenario labels: target DGE-IGE correlation and SMA/GMA variance ratio.\n",
+      "Intervals are conditional on the initial sets. The true optimum is a simulation evaluation endpoint.")) +
+  mainTheme + theme(legend.position = "bottom", strip.text = element_text(size = 17),
+    panel.spacing.x = grid::unit(1.2, "lines"), panel.grid.major.y = element_line(color = "grey92"))
+
+
+cairo_pdf(paste0(saveDir, scriptID, "FigureS9_Discovery_CycleSavings.pdf"), width = 13, height = 10)
+print(mainPlotAFull + labs(title = "Figure S9a  Optimum discovery"))
+print(mainPlotB)
 dev.off()
 
-
-##### 3.5. Min distance to observed set #####
-diagVec <- diag(gbygMat)
-distMat <- sqrt(outer(diagVec, diagVec, "+") - 2 * gbygMat)
-
-fileNameDistPlot <- paste0(saveDir, scriptID, "BOPlot_Dist_gTrueCompare.pdf")
-if (!file.exists(fileNameDistPlot)) {
-  pdf(file = fileNameDistPlot, width = 15, height = 12)
-  distPlotLst <- lapply(X = 1:nParUniq, FUN = function(parUniqNo) {
-    
-    parNoNow <- (1:nPar)[parUniqVec == parUniqNo]
-    genCor <- parSetDf$genCor[parNoNow[1]]
-    h2 <- parSetDf$h2[parNoNow[1]]
-    gamma <- parSetDf$gamma[parNoNow[1]]
-    
-    ### load phenotype to calc true genotypic values
-    fileNamePheno <- paste0(phenoDir, "0.3.allSampledRes_phenotype_genCor_", genCor, 
-                            "_h2_", h2, "_gamma_", gamma, "_nRep_", nRep, ".rds")
-    ### gTrue
-    gTrueLst <- lapply(X = 1:nRep, FUN = function(repNo) {
-      phenoLst <- readRDS(file = fileNamePheno)[[repNo]]
-      ### true best pair
-      gTrueA <- scale(phenoLst$dA + phenoLst$sBtoA + phenoLst$vA)
-      gTrueB <- scale(phenoLst$dB + phenoLst$sAtoB + phenoLst$vB)
-      gTrue <- gTrueA + gTrueB
-      return(gTrue)
-    })
-    
-    plotDfLst <- lapply(X = parNoNow, FUN = function(no) {
-      
-      parDir <- paste0(boDir, "parNo_", no, "/")
-      repNoNow <- parSetDf$rep[no]
-      
-      ### gTrueNow
-      trueGVec <- gTrueLst[[repNoNow]]
-      
-      do.call(what = rbind, args = lapply(X = indexName, FUN = function(indexNameNow){
-        
-        boDfLst <- lapply(X = 1:nRepBo, FUN = function(boRepNoNow){
-          
-          fileNameBoRes <- paste0("2.0.selectedPairNo_allIteration_BORepNo_", boRepNoNow, ".rds")
-          indexDirNow <- paste0(parDir, indexNameNow, "/BO_result/")
-          boResNow <- readRDS(file = paste0(indexDirNow, fileNameBoRes))
-          
-          cycleDfLst <- lapply(X = seq_along(boResNow)[-1], FUN = function(i){
-            
-            selNow <- boResNow[[i]]
-            obsNow <- unique(unlist(boResNow[seq_len(i - 1)]))
-            
-            minDistNow <- apply(distMat[selNow, obsNow, drop = FALSE], 1, min)
-            trueGMax <- max(trueGVec)
-            trueGMin <- min(trueGVec)
-            trueGNow <- (trueGMax - trueGVec[selNow]) / (trueGMax - trueGMin)
-            
-            data.frame(Index = indexNameNow, RepNo = repNoNow,
-                       BoRepNo = boRepNoNow, CycleNo = i, PairNo = selNow,
-                       MinDist = minDistNow, RelGap = trueGNow)
-          })
-          
-          do.call(rbind, cycleDfLst)
-        })
-        
-        do.call(rbind, boDfLst)
-      }))
-    })
-    
-    plotDf <- do.call(what = rbind, args = plotDfLst)
-    plotDf$Index <- factor(plotDf$Index, levels = indexName)
-    
-    mainTitle <- paste0("genCor: ", genCor, "  h2: ", h2, "  gamma: ", gamma)
-    
-    ### min distance v.s. trueGV gap (all points)
-    # p1 <- ggplot(plotDf, aes(x = MinDist, y = RelGap, color = CycleNo)) +
-    #   geom_point(alpha = 0.15, size = 0.7) +
-    #   scale_color_viridis_c() +
-    #   facet_wrap(~Index, ncol = 2) +
-    #   labs(x = "Min distance to observed set",
-    #        y = "Relative gap from true maximum",
-    #        color = "Cycle",
-    #        title = mainTitle) +
-    #   theme_bw() +
-    #   theme(axis.text = element_text(size = 14),
-    #         axis.title = element_text(size = 16),
-    #         strip.text = element_text(size = 14),
-    #         plot.title = element_text(size = 16))
-    
-    ### min distance v.s. trueGV gap (only median)
-    repSumDf <- aggregate(cbind(MinDist, RelGap) ~ Index + RepNo + BoRepNo + CycleNo,
-                          data = plotDf, FUN = median)
-    allSumDf <- aggregate(cbind(MinDist, RelGap) ~ Index + CycleNo,
-                          data = repSumDf, FUN = median)
-    p1 <- ggplot() +
-      geom_point(data = repSumDf,
-                 aes(x = MinDist, y = RelGap, color = CycleNo),
-                 alpha = 0.25, size = 1.2) +
-      geom_path(data = allSumDf,
-                aes(x = MinDist, y = RelGap, group = Index),
-                color = "black", linewidth = 1) +
-      geom_point(data = allSumDf,
-                 aes(x = MinDist, y = RelGap, fill = CycleNo),
-                 shape = 21, color = "black", size = 3) +
-      scale_color_viridis_c() +
-      scale_fill_viridis_c() +
-      facet_wrap(~Index, ncol = 2) +
-      labs(x = "Min distance to observed set",
-           y = "Relative gap from true maximum",
-           color = "Cycle", fill = "Cycle", title = mainTitle) +
-      theme_bw() +
-      theme(axis.text = element_text(size = 14),
-            axis.title = element_text(size = 16),
-            strip.text = element_text(size = 14))
-    
-    ### min distance in each cycle
-    p2 <- ggplot(plotDf, aes(x = factor(CycleNo), y = MinDist, color = CycleNo)) +
-      geom_jitter(width = 0.25, height = 0, alpha = 0.15, size = 0.7) +
-      scale_color_viridis_c() +
-      facet_wrap(~Index, ncol = 2) +
-      labs(x = "Cycle",
-           y = "Min distance to observed set",
-           color = "Cycle", title = mainTitle) +
-      theme_bw() +
-      theme(axis.text = element_text(size = 14),
-            axis.title = element_text(size = 16),
-            strip.text = element_text(size = 14))
-    
-    print(p1)
-    print(p2)
-  })
-  dev.off()
+###### Figures 4, 5 and S10: candidate selection and discovery ranks ######
+mechanismMethods <- indexName
+mechanismRho <- c(-.7, .7)
+mechanismH2 <- .7
+mechanismGamma <- .2
+mechanismInitialDf <- selection$initial
+mechanismExampleDf <- selection$example
+mechanismDiscoveryDf <- selection$discovery
+mechanismInitialBlocks <- mechanismInitialDf %>% group_by(genCor, phenotypeRep, method) %>%
+  summarise(value = mean(differentFromMu), .groups = "drop") %>% mutate(metric = "differentFromMu")
+mechanismInitialSummary <- mechanismInitialBlocks %>% group_by(genCor, method, metric) %>%
+  summarise(Mean = mean(value), SE = sd(value) / sqrt(n()), .groups = "drop")
+mechanismDiscoveryBlocks <- mechanismDiscoveryDf %>% group_by(genCor, h2, gamma, phenotypeRep, method) %>%
+  summarise(percent = 100 * mean(outsideMeanTop56), .groups = "drop")
+mechanismDiscoverySummary <- mechanismDiscoveryBlocks %>% group_by(genCor, h2, gamma, method) %>%
+  summarise(Mean = mean(percent), SE = sd(percent) / sqrt(n()), .groups = "drop")
+##### Publication figures #####
+mechanismColors <- setNames(scales::hue_pal()(4), mechanismMethods)
+mechanismShapes <- c(Mu = 18, PI = 16, EI = 17, UCB = 15)
+mechanismTheme <- theme_bw(base_size = 18, base_family = 'sans') +
+  theme(plot.title = element_text(size = 23, face = 'bold', margin = margin(b = 9)),
+    plot.subtitle = element_text(size = 16, margin = margin(b = 11)),
+    axis.title = element_text(size = 19), axis.text = element_text(size = 17),
+    axis.ticks = element_line(linewidth = 0.65), panel.border = element_rect(linewidth = 0.75),
+    panel.grid.major = element_line(color = 'grey92', linewidth = 0.25),
+    panel.grid.minor = element_blank(), strip.background = element_rect(fill = 'grey96'),
+    strip.text = element_text(size = 19), panel.spacing = grid::unit(1.0, 'lines'),
+    legend.position = 'bottom', legend.title = element_blank(), legend.text = element_text(size = 18),
+    legend.key.width = grid::unit(1.3, 'cm'),
+    plot.caption = element_text(size = 12.5, hjust = 0, lineheight = 1.12),
+    plot.margin = margin(12, 16, 10, 14))
+mechanismExampleDf$method <- factor(mechanismExampleDf$method, levels = mechanismMethods)
+mechanismInitialBlocks$method <- factor(mechanismInitialBlocks$method, levels = mechanismMethods)
+mechanismInitialSummary$method <- factor(mechanismInitialSummary$method, levels = mechanismMethods)
+mechanismExampleX <- range(c(mechanismExampleDf$postMean, mechanismExampleDf$incumbent))
+mechanismExampleY <- range(mechanismExampleDf$postSD)
+mechanismExamplePlots <- list()
+for (rhoNow in mechanismRho) {
+  exampleNow <- filter(mechanismExampleDf, genCor == rhoNow)
+  mechanismExamplePlots[[length(mechanismExamplePlots) + 1L]] <-
+    ggplot(exampleNow, aes(postMean, postSD)) +
+    geom_point(color = 'grey77', size = 0.65, alpha = 0.4) +
+    geom_vline(data = distinct(exampleNow, method, incumbent), aes(xintercept = incumbent),
+      linetype = 'dashed', linewidth = 0.8, color = 'grey35') +
+    geom_point(data = filter(exampleNow, selected), aes(color = method, shape = method),
+      size = 3.2, show.legend = FALSE) +
+    geom_point(data = filter(exampleNow, optimum), shape = 21, fill = 'white', color = 'white', size = 5.6) +
+    geom_point(data = filter(exampleNow, optimum), shape = 8, color = 'black', size = 5.0, stroke = 1.05) +
+    scale_color_manual(values = mechanismColors) + scale_shape_manual(values = mechanismShapes) +
+    scale_x_continuous(limits = mechanismExampleX, breaks = scales::breaks_pretty(n = 5),
+      expand = expansion(mult = 0.04)) +
+    scale_y_continuous(limits = mechanismExampleY, breaks = scales::breaks_pretty(n = 5),
+      expand = expansion(mult = 0.04)) +
+    facet_wrap(vars(method), ncol = 2) +
+    labs(title = 'Figure 4  Selection from a common GP',
+      subtitle = bquote(h^2 == 0.7 ~ ',' ~ gamma == 0.2 ~ ',' ~ rho == .(rhoNow) ~
+        '; first model-guided batch'),
+      x = 'Posterior mean of the objective', y = 'Posterior SD of the latent objective',
+      caption = paste0('Gray: all 5,158 candidates; colored points: 56 selected pairs; black star: the true optimum.\n',
+        'Dashed line: observed-pair posterior-mean incumbent (PI/EI). Both scenarios use the same axes.\n',
+        'Phenotype replicate 1, initial set 1. The common GP reproduces all four saved selections.\n',
+        'SD is conditional on fitted variance components and excludes observation noise.')) +
+    mechanismTheme + theme(legend.position = 'none')
 }
+
+### Show the ten phenotype means as well as their overall mean and SE.
+mechanismSummaryPlots <- list()
+for (metricNow in 'differentFromMu') {
+  blockNow <- filter(mechanismInitialBlocks, metric == metricNow) %>%
+    mutate(displayMethod = as.numeric(method) + (phenotypeRep - (nRep + 1) / 2) * 0.035)
+  summaryNow <- filter(mechanismInitialSummary, metric == metricNow) %>%
+    mutate(displayMethod = as.numeric(method))
+  yLabel <- 'Pairs differing from Mu'
+  p <- ggplot(summaryNow, aes(displayMethod, Mean, color = method, shape = method)) +
+    geom_point(data = blockNow, aes(y = value), size = 2.3, alpha = 0.38, show.legend = FALSE) +
+    geom_errorbar(aes(ymin = Mean - SE, ymax = Mean + SE), width = 0.16, linewidth = 1.05) +
+    geom_point(size = 4.6) +
+    scale_color_manual(values = mechanismColors, drop = FALSE) +
+    scale_shape_manual(values = mechanismShapes, drop = FALSE) +
+    scale_x_continuous(breaks = 1:4, labels = mechanismMethods, limits = c(0.65, 4.35)) +
+    scale_y_continuous(breaks = scales::breaks_pretty(n = 4), expand = expansion(mult = 0.15)) +
+    facet_wrap(vars(genCor), nrow = 1,
+      labeller = label_bquote(rho == .(as.numeric(as.character(genCor))))) +
+    labs(x = NULL, y = yLabel) + mechanismTheme + theme(legend.position = 'none')
+  if (metricNow == 'differentFromMu') {
+    p <- p + labs(title = 'Figure 5b  Differences in the first selected batch',
+      subtitle = expression(h^2 == 0.7 ~ ',' ~ gamma == 0.2),
+      caption = paste0('Large points: mean +/- SE of 10 phenotype means, each averaging 10 initial-set runs.\n',
+      'Small points: phenotype means; differing pairs = 56 - overlap with Mu.'))
+  }
+  mechanismSummaryPlots[[length(mechanismSummaryPlots) + 1L]] <- p
+}
+
+### Discovery ranks describe each method's own GP immediately before the final selected batch.
+mechanismRankDf <- mechanismDiscoveryDf %>%
+  filter(h2 == mechanismH2, gamma == mechanismGamma, genCor %in% mechanismRho, method != 'Mu') %>%
+  mutate(method = factor(method, levels = c('PI', 'EI', 'UCB')),
+    genCor = factor(genCor, levels = mechanismRho))
+mechanismRankLabels <- mechanismRankDf %>% group_by(genCor, method) %>%
+  summarise(label = paste0(sum(outsideMeanTop56), '/100\noutside mean top 56'), .groups = 'drop')
+mechanismRankXMax <- max(350, ceiling(max(mechanismRankDf$meanRank) / 100) * 100)
+mechanismRankPlot <- ggplot(mechanismRankDf,
+  aes(meanRank, acquisitionRank, color = method, shape = method)) +
+  annotate('rect', xmin = 56.5, xmax = mechanismRankXMax, ymin = 0.85, ymax = 140, fill = 'grey93') +
+  geom_abline(intercept = 0, slope = 1, color = 'grey70', linewidth = 0.65) +
+  geom_vline(xintercept = 56.5, linetype = 'dashed', color = 'grey35', linewidth = 0.8) +
+  geom_hline(yintercept = 56.5, linetype = 'dashed', color = 'grey35', linewidth = 0.8) +
+  geom_point(size = 3.2, alpha = 0.7) +
+  geom_text(data = mechanismRankLabels, aes(x = 1, y = 125, label = label),
+    inherit.aes = FALSE, hjust = 0, vjust = 1, size = 4.5, lineheight = 0.95, color = 'grey20') +
+  scale_color_manual(values = mechanismColors) + scale_shape_manual(values = mechanismShapes) +
+  scale_x_log10(breaks = c(1, 10, 56, 300, 1000, 3000), limits = c(0.85, mechanismRankXMax), expand = expansion(mult = 0.01)) +
+  scale_y_log10(breaks = c(1, 10, 56), limits = c(0.85, 140), expand = expansion(mult = 0.01)) +
+  facet_grid(rows = vars(genCor), cols = vars(method),
+    labeller = label_bquote(rows = rho == .(as.numeric(as.character(genCor))))) +
+  labs(title = 'Figure 5a  Ranking the optimum at discovery',
+    subtitle = expression(h^2 == 0.7 ~ ',' ~ gamma == 0.2 ~ '; ranks under the same GP at discovery'),
+    x = 'Rank by posterior mean (log scale)',
+    y = 'Rank by acquisition score (log scale)',
+    caption = paste0('Each point is one run (100 per panel). Shading: posterior-mean rank > 56.\n',
+      'Both ranks use the same GP and unobserved candidate set immediately before discovery.\n',
+      'Dashed lines: batch cutoff; gray diagonal: equal ranks. Axes are logarithmic (1 = best).\n',
+      'Methods have different histories; the comparison concerns their final selection decisions.\n',
+      'Mu has identical ranks and is omitted. Overlapping points are not jittered.')) +
+  mechanismTheme + theme(legend.position = 'none')
+
+mechanismScenarioLabels <- mechanismDiscoverySummary %>% distinct(genCor, gamma) %>%
+  arrange(genCor, gamma) %>% mutate(label = sprintf('rho == %.1f ~ "," ~ gamma == %.1f', genCor, gamma))
+mechanismAllDf <- mechanismDiscoverySummary %>% filter(method != 'Mu') %>%
+  mutate(method = factor(method, levels = c('PI', 'EI', 'UCB')),
+    scenario = factor(sprintf('rho == %.1f ~ "," ~ gamma == %.1f', genCor, gamma),
+      levels = rev(mechanismScenarioLabels$label)))
+mechanismAllDodge <- position_dodge(width = 0.9, orientation = 'y', reverse = TRUE)
+mechanismRateLimit <- max(40, ceiling(max(mechanismAllDf$Mean + mechanismAllDf$SE) / 10) * 10)
+mechanismAllPlot <- ggplot(mechanismAllDf, aes(Mean, scenario, color = method, shape = method, group = method)) +
+  geom_vline(xintercept = 0, color = 'grey55', linewidth = 0.5) +
+  geom_errorbar(aes(xmin = Mean - SE, xmax = Mean + SE), orientation = 'y',
+    position = mechanismAllDodge, width = 0.16, linewidth = 1.05) +
+  geom_point(position = mechanismAllDodge, size = 4.4) +
+  scale_color_manual(values = mechanismColors, breaks = c('PI', 'EI', 'UCB')) +
+  scale_shape_manual(values = mechanismShapes, breaks = c('PI', 'EI', 'UCB')) +
+  scale_x_continuous(limits = c(0, mechanismRateLimit), breaks = seq(0, mechanismRateLimit, by = 10),
+    labels = function(x) paste0(x, '%'), expand = expansion(mult = c(0.02, 0.03))) +
+  scale_y_discrete(labels = function(x) parse(text = x), expand = expansion(add = 0.5)) +
+  facet_wrap(vars(h2), nrow = 1, labeller = label_bquote(h^2 == .(h2))) +
+  labs(title = 'Figure S10  Optima outside the mean top 56',
+    subtitle = 'All 18 scenarios; ranks under the same GP at discovery',
+    x = 'Runs with the optimum outside the mean top 56', y = NULL,
+    caption = paste0('Points: percentage of 100 runs. Bars: SE of 10 phenotype means (10 initial sets each).\n',
+      'The optimum was selected despite a posterior-mean rank > 56 under that method\'s GP.\n',
+      'Mu is 0% by construction. Earlier data collection differs among methods.\n',
+      'Rows: target DGE-IGE correlation and SMA/GMA variance ratio.')) +
+  mechanismTheme + theme(panel.grid.major.y = element_line(color = 'grey92', linewidth = 0.25),
+    panel.spacing.x = grid::unit(1.25, 'cm'))
+
+
+cairo_pdf(paste0(saveDir, scriptID, "Figure4_CommonGPSelection.pdf"), width = 11.5, height = 9.5)
+for (p in mechanismExamplePlots) print(p)
+dev.off()
+cairo_pdf(paste0(saveDir, scriptID, "Figure5_DiscoveryRanks_SelectionDifference.pdf"), width = 11.5, height = 9.5)
+print(mechanismRankPlot)
+print(mechanismSummaryPlots[[1]])
+dev.off()
+cairo_pdf(paste0(saveDir, scriptID, "FigureS10_OptimumOutsideMeanTop56.pdf"), width = 11.5, height = 9.5)
+print(mechanismAllPlot)
+dev.off()
+attr(boIterDf, "selectionMechanism") <- selection
+saveRDS(boIterDf, paste0(saveDir, scriptID, "BO_PublicationSummary.rds"))

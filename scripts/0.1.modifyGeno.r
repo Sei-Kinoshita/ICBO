@@ -3,8 +3,6 @@ rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
 ##### 0.1. Load Packages #####
-require(data.table)
-require(openxlsx)
 require(gaston)
 
 ##### 0.2. Set Parameters #####
@@ -16,68 +14,32 @@ sbMapRate <- 2.2
 gmMapRate <- 2.5
 
 ##### 0.3. Set Directories #####
-dirRaw <- "rawData/"
-dirRawSb <- paste0(dirRaw, "sorghum/")
-dirRawGm <- paste0(dirRaw, "soybean/")
-
 dirSave <- "data/genotype/"
+dir.create(dirSave, recursive = TRUE, showWarnings = FALSE)
 
 
 
 
-###### 1. Load Data ######
-### sorghum
-fileNameSbGeno <- paste0(dirRawSb, "Sbi454_237_180927.fil.SNP.remHet.MS0.95_bi_MQ20_DP3-1000.MAF0.025.imputed.vcf.gz")
-genoSbRaw <- read.vcf(file = fileNameSbGeno)
+###### 1. Published genotype panels and fixed selected-accession IDs ######
+### The published matrices already underwent full-panel MAF/LD filtering and
+### removal of markers containing heterozygotes. See README for raw-data provenance.
+selectedFile <- "data/SelectedIndList_kMedoids_nIndSb_79_nIndGm_66.rds"
+if (!file.exists(selectedFile)) {
+  stop("Selected accession IDs are not distributed with this code-only release. ",
+    "Supply ", selectedFile, " as described in README.md.", call. = FALSE)
+}
+### Existing public full-panel files are at the repository root.
+fileSb <- paste0(dirSave, "0.1.Sorghum237_geno_Maf_0.1_LD_0.6.rds")
+fileGm <- paste0(dirSave, "0.1.Soybean198_geno_Maf_0.1_LD_0.6.rds")
+if (!file.exists(fileSb)) fileSb <- basename(fileSb)
+if (!file.exists(fileGm)) fileGm <- basename(fileGm)
+genoSbMat <- readRDS(fileSb)
+genoGmMat <- readRDS(fileGm)
+selIndLst <- readRDS(selectedFile)
+stopifnot(nrow(genoSbMat) == 237L, nrow(genoGmMat) == 198L,
+  length(selIndLst$Sb) == 79L, length(selIndLst$Gm) == 66L)
 
-fileNameSbInfo <- paste0(dirRawSb, "Sbi454_237_180927.fil.SNP.remHet.MS0.95_bi_MQ20_DP3-1000.MAF0.025.imputed_marker.csv")
-sbMrkInfo <- fread(fileNameSbInfo)
-
-### soybean (Glycine max)
-fileNameGmGeno <- paste0(dirRawGm, "Gm198_HCDB_190207.fil.snp.remHet.MS0.95_bi_MQ20_DP3-1000.MAF0.025.imputed.v2.chrnum.vcf.gz")
-genoGmRaw <- read.vcf(fileNameGmGeno)
-
-### selected individuals (by k-medoids)
-fileNameSelIndLst <- "data/SelectedIndList_kMedoids_nIndSb_79_nIndGm_66.rds"
-selIndLst <- readRDS(file = fileNameSelIndLst)
-
-
-###### 2. Modify Data ######
-##### 2.1. Sorghum #####
-### change marker name
-genoSbRaw@snps$chr <- sbMrkInfo$chrom
-genoSbRaw@snps$id <- paste0("Chr",
-                            formatC(sbMrkInfo$chrom, width = 2, flag = "0"),
-                            "_",
-                            formatC(sbMrkInfo$pos, width = 8, flag = "0"))
-### cut by MAF
-genoSbMaf <- select.snps(x = genoSbRaw, condition = maf >= mafThre)
-### cut by LD
-genoSbFil <- as.matrix(LD.thin(genoSbMaf, threshold = ldThre))
-
-### cut hetero markers
-isHeteroSb <- apply(X = genoSbFil, MARGIN = 2, 
-                    FUN = function(oneMrkVec) any(oneMrkVec == 1))
-genoSbMat <- genoSbFil[, !isHeteroSb]
-
-
-##### 2.2. Soybean #####
-### change marker name
-genoGmRaw@snps$id <- paste0("Chr",
-                            formatC(genoGmRaw@snps$chr, width = 2, flag = "0"),
-                            "_",
-                            formatC(genoGmRaw@snps$pos, width = 8, flag = "0"))
-### cut by MAF
-genoGmMaf <- select.snps(x = genoGmRaw, condition = maf >= mafThre)
-### cut by LD
-genoGmFil <- as.matrix(LD.thin(genoGmMaf, threshold = ldThre))
-
-### cut hetero markers
-isHeteroGm <- apply(X = genoGmFil, MARGIN = 2, 
-                    FUN = function(oneMrkVec) any(oneMrkVec == 1))
-genoGmMat <- genoGmFil[, !isHeteroGm]
-
-
+###### 2. Marker positions and selected panels ######
 ##### 2.3. Extract marker position information #####
 ### sorghum
 sbFilInfoDf <- data.frame(MrkName = colnames(genoSbMat), 
@@ -151,7 +113,7 @@ fileNameSelIndGenoGm <- paste0(dirSave, scriptID,
                                "Soybean66_geno_Maf_", mafThre, "_LD_", ldThre, 
                                ".rds")
 saveRDS(object = genoSelIndGm, file = fileNameSelIndGenoGm)
-### marker information 79 lines
+### marker information 66 lines
 fileNameSelIndInfoGm <- paste0(dirSave, scriptID, 
                                "Soybean66_markerInfo_Maf_", mafThre, "_LD_", ldThre, 
                                ".rds")

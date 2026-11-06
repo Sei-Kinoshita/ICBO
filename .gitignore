@@ -1,0 +1,16 @@
+# Manuscripts, correspondence, additional inputs and generated analyses stay local.
+*.docx
+*.pdf
+*.png
+*.log
+.Rhistory
+.RData
+.Rproj.user/
+midstream/
+rawData/
+data/
+.codex/
+.agents/
+# The three previously public genotype files at the repository root remain tracked.
+# Local transfer bundles
+ICBO_GitHub_publication_*.zip

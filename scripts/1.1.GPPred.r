@@ -5,6 +5,7 @@ gc(reset = TRUE);gc(reset = TRUE)
 
 ##### 0.2. Load packages #####
 require(BGLR)
+source("scripts/function_scripts/2.0.function.BO.R")
 
 ##### 0.3. Set parameters #####
 scriptID <- "1.1."
@@ -13,16 +14,15 @@ cropName <- c("Sb", "Gm")
 
 nRep <- 10 ### repetition for phenotype
 
-# nCores <- 30
 nCores <- 40
 nCV <- 10
+### Historical GP worker RNG states were not archived. These seeds apply to new
+### refits only; locally retained publication summaries preserve the submitted results.
+gpSeedBase <- 20261106L
 ### for BGLR
 nIter <- 10000
 burnIn <- 2000
 thin <- 20
-# nIter <- 10
-# burnIn <- 2
-# thin <- 1
 
 ##### 0.4. Define directories #####
 dirData <- "data/"
@@ -31,7 +31,7 @@ dirPheno <- paste0(dirData, "phenotype/")
 dirComb <- paste0(dirData, "selTrainData_GP/")
 dirFit <- "midstream/1.0.GP_Fitting/"
 
-dirScr <- paste0("midstream/", scriptID, "GP_CV/") 
+dirScr <- "midstream/1.1.GP_CV/"
 if (!dir.exists(dirScr)) {
   dir.create(dirScr, recursive = TRUE)
 }
@@ -61,13 +61,12 @@ if (!dir.exists(dirM5)) {
   dir.create(dirM5, recursive = TRUE)
 }
 
-
-
 ###### 1. Load Data ######
 ##### 1.1. Parameter Set #####
 fileNameParSet <- paste0(dirPheno, "0.3.parmeterSet.rds")
 parSetDf <- readRDS(file = fileNameParSet)
 nPar <- nrow(parSetDf)
+parNoVec <- seq_len(nPar)
 
 ##### 1.2. Pair Name (fixed order) #####
 fileNamePairName <- paste0(dirPheno, "0.3.pairNameDf_5214Pair.rds")
@@ -82,23 +81,32 @@ K2 <- readRDS(file = fileNameK2)
 K3 <- readRDS(file = fileNameK3)
 
 ##### 1.4. Selected combination for CV #####
-fileNameSelCombLst1 <- paste0(dirComb, "0.4.trainData_selCombName_random.rds")
-fileNameSelCombLst2 <- paste0(dirComb, "0.4.trainData_selCombName_allComb.rds")
-fileNameSelCombLst3 <- paste0(dirComb, "0.4.trainData_selCombName_useOnce.rds")
-selCombRandomLst <- readRDS(file = fileNameSelCombLst1)
-selCombAllLst <- readRDS(file = fileNameSelCombLst2)
-selCombOnceLst <- readRDS(file = fileNameSelCombLst3)
+fileNameSelCombAll <- paste0(dirComb, "0.4.trainData_selCombName_allComb.rds")
+fileNameSelCombOnce <- paste0(dirComb, "0.4.trainData_selCombName_useOnce.rds")
+selCombAllLst <- readRDS(file = fileNameSelCombAll)
+selCombOnceLst <- readRDS(file = fileNameSelCombOnce)
 
-cvCombLst <- list(Random = selCombRandomLst, All = selCombAllLst, Once = selCombOnceLst)
-cvMethod <- names(cvCombLst)
-rm(selCombRandomLst);rm(selCombAllLst);rm(selCombOnceLst)
+### Only the two training designs used in the manuscript.
+cvCombLst <- list(All = selCombAllLst, Once = selCombOnceLst)
+cvMethod <- c("All", "Once") ### Design-D, Design-B; original file keys retained
+rm(selCombAllLst);rm(selCombOnceLst)
 
-
-
+##### 1.5. Start independent R workers (compatible with Positron) #####
+cl <- NULL
+tryCatch({
+  cl <- parallel::makePSOCKcluster(nCores)
+  invisible(parallel::clusterCall(cl, setwd, getwd()))
+  invisible(parallel::clusterEvalQ(cl, library(BGLR)))
+  parallel::clusterExport(cl, varlist = c(
+    "scriptID", "cropName", "parSetDf", "nRep", "nIter", "burnIn", "thin",
+    "dirPheno", "dirM1", "dirM2", "dirM3", "dirM4", "dirM5",
+    "pairNameDf", "K1", "K2", "K3", "cvMethod",
+    "gpSeedBase", "CalcPostMeanVar"), envir = environment())
+  cat("PSOCK workers ready:", length(cl), "\n")
 
 ###### 2. Model1 (only DGE) ######
 ##### 2.1. Prediction #####
-for (cvMethodNo in 1:3) {
+for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 1 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
 
@@ -155,26 +163,32 @@ for (cvMethodNo in 1:3) {
             ETA <- list(GenoRKHS = list(K = K2, model = "RKHS"))
           }
           ### fitting
+          fitStart <- proc.time()[["elapsed"]]
+          set.seed(gpSeedBase + 1L * 100000L + cvMethodNo * 10000L +
+            cvNo * 1000L + parNo * 2L + cropNo)
           fmResM1 <- BGLR(y = yNow,
                           saveAt = fileNameParameter, ETA = ETA,
                           nIter = nIter, burnIn = burnIn, thin = thin,
                           verbose = FALSE)
-          ### save all fitting results of BayesB
+          ### Save fitted GBLUP model and measured elapsed time
+          fmResM1$timing <- data.frame(genCor = genCor, h2 = h2, gamma = gamma,
+            phenotypeRep = repNo, trainingRep = cvNo, trainingDesign = cvMethod[cvMethodNo],
+            Crop = cropName[cropNo], Model = "Model1",
+            nTrainingPair = length(unique(trainPos)), nPredictionCandidate = nrow(pairNameDf) - length(unique(trainPos)),
+            fitPredictionTime = proc.time()[["elapsed"]] - fitStart)
           saveRDS(object = fmResM1, file = fileNameFitting)
         }
       })
     }
-    pbmcapply::pbmclapply(X = 1:nPar, FUN = PerformM1, mc.cores = nCores)
+    parallel::clusterExport(cl, c("cvMethodNo", "cvNo", "cvCombLstNow"), envir = environment())
+    invisible(parallel::parLapply(cl, X = parNoVec, fun = PerformM1))
     gc(reset = TRUE);gc(reset = TRUE)
   }
 }
 
-
-
-
 ###### 3. Model2 (DGE + IGE) ######
 ##### 3.1. Prediction #####
-for (cvMethodNo in 1:3) {
+for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 2 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
 
@@ -228,26 +242,32 @@ for (cvMethodNo in 1:3) {
           ETA <- list(GenoSb = list(K = K1, model = "RKHS"),
                       GenoGm = list(K = K2, model = "RKHS"))
           ### fitting
+          fitStart <- proc.time()[["elapsed"]]
+          set.seed(gpSeedBase + 2L * 100000L + cvMethodNo * 10000L +
+            cvNo * 1000L + parNo * 2L + cropNo)
           fmResM2 <- BGLR(y = yNow,
                           saveAt = fileNameParameter, ETA = ETA,
                           nIter = nIter, burnIn = burnIn, thin = thin,
                           verbose = FALSE)
-          ### save all fitting results of BayesB
+          ### Save fitted GBLUP model and measured elapsed time
+          fmResM2$timing <- data.frame(genCor = genCor, h2 = h2, gamma = gamma,
+            phenotypeRep = repNo, trainingRep = cvNo, trainingDesign = cvMethod[cvMethodNo],
+            Crop = cropName[cropNo], Model = "Model2",
+            nTrainingPair = length(unique(trainPos)), nPredictionCandidate = nrow(pairNameDf) - length(unique(trainPos)),
+            fitPredictionTime = proc.time()[["elapsed"]] - fitStart)
           saveRDS(object = fmResM2, file = fileNameFitting)
         }
       })
     }
-    pbmcapply::pbmclapply(X = 1:nPar, FUN = PerformM2, mc.cores = nCores)
+    parallel::clusterExport(cl, c("cvMethodNo", "cvNo", "cvCombLstNow"), envir = environment())
+    invisible(parallel::parLapply(cl, X = parNoVec, fun = PerformM2))
     gc(reset = TRUE);gc(reset = TRUE)
   }
 }
 
-
-
-
 ###### 4. Model3 (DGE + IGE + SMA) ######
 ##### 4.1. Prediction #####
-for (cvMethodNo in 1:3) {
+for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 3 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
 
@@ -300,12 +320,14 @@ for (cvMethodNo in 1:3) {
                       GenoGm = list(K = K2[trainPos, trainPos], model = "RKHS"),
                       GenoGbyG = list(K = K3[trainPos, trainPos], model = "RKHS"))
           ### fitting
+          fitStart <- proc.time()[["elapsed"]]
+          set.seed(gpSeedBase + 3L * 100000L + cvMethodNo * 10000L +
+            cvNo * 1000L + parNo * 2L + cropNo)
           fmResM3 <- BGLR(y = yNow,
                           saveAt = fileNameParameter, ETA = ETA,
                           nIter = nIter, burnIn = burnIn, thin = thin,
                           verbose = FALSE)
-          ### save all fitting results of BayesB
-          saveRDS(object = fmResM3, file = fileNameFitting)
+          ### Save fitted GBLUP model and measured elapsed time
 
           ### predict new individuals
           mu <- fmResM3$mu
@@ -325,21 +347,26 @@ for (cvMethodNo in 1:3) {
           fileNamePred <- paste0(dirM3Fit, scriptID, cropName[cropNo],
                                  "_predicted_yNew_parNo_", parNo, "_",
                                  cvMethod[cvMethodNo], "_CV_", cvNo, ".rds")
+          fmResM3$timing <- data.frame(genCor = genCor, h2 = h2, gamma = gamma,
+            phenotypeRep = repNo, trainingRep = cvNo, trainingDesign = cvMethod[cvMethodNo],
+            Crop = cropName[cropNo], Model = "Model3",
+            nTrainingPair = length(unique(trainPos)), nPredictionCandidate = nrow(pairNameDf) - length(unique(trainPos)),
+            fitPredictionTime = proc.time()[["elapsed"]] - fitStart)
+          saveRDS(object = fmResM3, file = fileNameFitting)
+          attr(yNew, "timing") <- fmResM3$timing
           saveRDS(object = yNew, file = fileNamePred)
         }
       })
     }
-    pbmcapply::pbmclapply(X = 1:nPar, FUN = PerformM3, mc.cores = nCores)
+    parallel::clusterExport(cl, c("cvMethodNo", "cvNo", "cvCombLstNow"), envir = environment())
+    invisible(parallel::parLapply(cl, X = parNoVec, fun = PerformM3))
     gc(reset = TRUE);gc(reset = TRUE)
   }
 }
 
-
-
-
 ###### 5. Model4 (DGE + IGE + Multitrait) ######
 ##### 5.1. Prediction #####
-for (cvMethodNo in 1:3) {
+for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 4 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
 
@@ -392,38 +419,44 @@ for (cvMethodNo in 1:3) {
                     GenoGm = list(K = K2, model = "RKHS", Cov = list(type = "UN")))
         resCov <- list(S0 = diag(2), type = "UN")
         ### fitting
+        fitStart <- proc.time()[["elapsed"]]
+        set.seed(gpSeedBase + 4L * 100000L + cvMethodNo * 10000L +
+          cvNo * 1000L + parNo * 2L)
         fmResM4 <- Multitrait(y = yNow, resCov = resCov,
                               saveAt = fileNameParameter, ETA = ETA,
                               nIter = nIter, burnIn = burnIn, thin = thin,
                               verbose = FALSE)
-        ### save all fitting results of BayesB
+        ### Save fitted GBLUP model and measured elapsed time
+        fmResM4$timing <- data.frame(genCor = genCor, h2 = h2, gamma = gamma,
+          phenotypeRep = repNo, trainingRep = cvNo, trainingDesign = cvMethod[cvMethodNo],
+          Crop = "Sb+Gm", Model = "Model4",
+          nTrainingPair = length(unique(trainPos)), nPredictionCandidate = nrow(pairNameDf) - length(unique(trainPos)),
+          fitPredictionTime = proc.time()[["elapsed"]] - fitStart)
         saveRDS(object = fmResM4, file = fileNameFitting)
       }
     }
-    pbmcapply::pbmclapply(X = 1:nPar, FUN = PerformM4, mc.cores = nCores)
+    parallel::clusterExport(cl, c("cvMethodNo", "cvNo", "cvCombLstNow"), envir = environment())
+    invisible(parallel::parLapply(cl, X = parNoVec, fun = PerformM4))
     gc(reset = TRUE);gc(reset = TRUE)
   }
 }
 
-
-
-
 ###### 6. Model5 (DGE + IGE + SMA + Multitrait) ######
 ##### 6.1. Prediction #####
-for (cvMethodNo in 1:3) {
+for (cvMethodNo in seq_along(cvMethod)) {
   for (cvNo in 1:nCV) {
     cat("---------- Model: 5 / CV:", cvNo," / cvMethod:", cvMethod[cvMethodNo], "----------\n")
-    
+
     cvCombLstNow <- cvCombLst[[cvMethodNo]][[cvNo]]
-    
+
     PerformM5 <- function(parNo) {
-      
+
       ### parmeter set
       genCor <- parSetDf$genCor[parNo]
       h2 <- parSetDf$h2[parNo]
       gamma <- parSetDf$gamma[parNo]
       repNo <- parSetDf$rep[parNo]
-      
+
       ### prepare saving directory
       ### model parameter by BGLR
       dirM5Par <- paste0(dirM5, cvMethod[cvMethodNo], "/CV", cvNo, "/modelPar/")
@@ -435,20 +468,20 @@ for (cvMethodNo in 1:3) {
       if (!dir.exists(dirM5Fit)) {
         dir.create(dirM5Fit, recursive = TRUE)
       }
-      
+
       ### load phenotype data
       fileNamePhenoINow <- paste0(dirPheno, "0.3.scaled_phenotype_genCor_", genCor,
                                   "_h2_", h2, "_gamma_", gamma, "_nRep_", nRep, ".rds")
       phenoLst <- readRDS(fileNamePhenoINow)
-      
+
       ### fitting
       ### intercropping phenotype for two crops
       phenoMatNow <- cbind(phenoLst[[repNo]]$Sb, phenoLst[[repNo]]$Gm)
       ### for save
-      fileNameParameter <- paste0(dirM5Par, scriptID, "Multitrait_parNo_", parNo, 
+      fileNameParameter <- paste0(dirM5Par, scriptID, "Multitrait_parNo_", parNo,
                                   "_", cvMethod[cvMethodNo], "_CV_", cvNo, "_")
-      fileNameFitting <- paste0(dirM5Fit, scriptID, 
-                                "Multitrait_fitting_allRes_parNo_", parNo, "_", 
+      fileNameFitting <- paste0(dirM5Fit, scriptID,
+                                "Multitrait_fitting_allRes_parNo_", parNo, "_",
                                 cvMethod[cvMethodNo], "_CV_", cvNo, ".rds")
       if (!file.exists(fileNameFitting)) {
         ### training data for monocrop
@@ -457,21 +490,23 @@ for (cvMethodNo in 1:3) {
         ### extract selected individuals only
         yNow <- phenoMatNow[trainPos, ]
         ### for model
-        ETA <- list(GenoSb = list(K = K1[trainPos, trainPos], model = "RKHS", 
-                                  Cov = list(type = "UN")), 
-                    GenoGm = list(K = K2[trainPos, trainPos], model = "RKHS", 
-                                  Cov = list(type = "UN")), 
-                    GenoGbyG = list(K = K3[trainPos, trainPos], model = "RKHS", 
+        ETA <- list(GenoSb = list(K = K1[trainPos, trainPos], model = "RKHS",
+                                  Cov = list(type = "UN")),
+                    GenoGm = list(K = K2[trainPos, trainPos], model = "RKHS",
+                                  Cov = list(type = "UN")),
+                    GenoGbyG = list(K = K3[trainPos, trainPos], model = "RKHS",
                                     Cov = list(type = "DIAG")))
         resCov <- list(S0 = diag(2), type = "UN")
         ### fitting
-        fmResM5 <- Multitrait(y = yNow, resCov = resCov, 
+        fitStart <- proc.time()[["elapsed"]]
+        set.seed(gpSeedBase + 5L * 100000L + cvMethodNo * 10000L +
+          cvNo * 1000L + parNo * 2L)
+        fmResM5 <- Multitrait(y = yNow, resCov = resCov,
                               saveAt = fileNameParameter, ETA = ETA,
                               nIter = nIter, burnIn = burnIn, thin = thin,
                               verbose = FALSE)
-        ### save all fitting results of BayesB
-        saveRDS(object = fmResM5, file = fileNameFitting)
-        
+        ### Save fitted GBLUP model and measured elapsed time
+
         ### predict new individuals
         muVec <- fmResM5$mu
         u1o <- fmResM5$ETA$GenoSb$u ### trained u1
@@ -493,17 +528,29 @@ for (cvMethodNo in 1:3) {
         diag(k3oo) <- diag(k3oo) + 1e-08
         u3new <- k3no %*% solve(k3oo) %*% u3o
         ### prediction of phenotypic value for new individuals
-        yNew <- matrix(rep(muVec, each = nrow(u1new)), ncol = 2) + 
+        yNew <- matrix(rep(muVec, each = nrow(u1new)), ncol = 2) +
           u1new + u2new + u3new
         colnames(yNew) <- cropName
         ### save
-        fileNamePred <- paste0(dirM5Fit, scriptID, 
-                               "Multitrait_predicted_yNew_parNo_", parNo, "_", 
+        fileNamePred <- paste0(dirM5Fit, scriptID,
+                               "Multitrait_predicted_yNew_parNo_", parNo, "_",
                                cvMethod[cvMethodNo], "_CV_", cvNo, ".rds")
+        fmResM5$timing <- data.frame(genCor = genCor, h2 = h2, gamma = gamma,
+          phenotypeRep = repNo, trainingRep = cvNo, trainingDesign = cvMethod[cvMethodNo],
+          Crop = "Sb+Gm", Model = "Model5",
+          nTrainingPair = length(unique(trainPos)), nPredictionCandidate = nrow(pairNameDf) - length(unique(trainPos)),
+          fitPredictionTime = proc.time()[["elapsed"]] - fitStart)
+        saveRDS(object = fmResM5, file = fileNameFitting)
+        attr(yNew, "timing") <- fmResM5$timing
         saveRDS(object = yNew, file = fileNamePred)
       }
     }
-    pbmcapply::pbmclapply(X = 1:nPar, FUN = PerformM5, mc.cores = nCores)
+    parallel::clusterExport(cl, c("cvMethodNo", "cvNo", "cvCombLstNow"), envir = environment())
+    invisible(parallel::parLapply(cl, X = parNoVec, fun = PerformM5))
     gc(reset = TRUE);gc(reset = TRUE)
   }
 }
+
+}, finally = {
+  if (!is.null(cl)) parallel::stopCluster(cl)
+})

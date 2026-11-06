@@ -4,6 +4,7 @@ rm(list = ls())
 gc(reset = TRUE);gc(reset = TRUE)
 
 ##### 0.2. Load packages #####
+source("scripts/function_scripts/2.0.function.BO.R")
 
 ##### 0.3. Set parameters #####
 scriptID <- "0.4."
@@ -12,9 +13,10 @@ cropName <- c("Sb", "Gm")
 
 nCV <- 10
 nComb <- 520
+cv2Seed <- 20260928
 
-nSbM2 <- 26 ### number of selected Sb in method 2
-nGmM2 <- 20 ### number of selected Gm in method 2
+nSbCV1 <- 26 ### number of selected Sb in CV1
+nGmCV1 <- 20 ### number of selected Gm in CV1
 
 ##### 0.4. Define directories #####
 dataDir <- "data/"
@@ -37,43 +39,19 @@ selIndLst <- readRDS(file = fileNameSelIndLst)
 sbName <- selIndLst[["Sb"]]
 gmName <- selIndLst[["Gm"]]
 
-# ### distance matrix
-# fileNameDistSb <- paste0(dirGeno, "0.4.DistMat_euclidean_Sb.rds")
-# fileNameDistGm <- paste0(dirGeno, "0.4.DistMat_euclidean_Gm.rds")
-# genoDistSb <- readRDS(file = fileNameDistSb)
-# genoDistGm <- readRDS(file = fileNameDistGm)
-
 
 
 
 ###### 2. Select Training Data ######
-##### 2.1. Completely Random #####
-fileNameSelCombRandom <- paste0(saveDir, scriptID, 
-                                "trainData_selCombName_random.rds")
-if (!file.exists(fileNameSelCombRandom)) {
-  selCombRandomLst <- lapply(X = 1:nCV, FUN = function(cvNo) {
-    
-    allCombDf <- expand.grid(sbName, gmName, stringsAsFactors = FALSE)
-    colnames(allCombDf) <- c("Sb", "Gm")
-    
-    combPos <- sample(x = 1:nrow(allCombDf), size = nComb, replace = FALSE)
-    finCombDf <- allCombDf[combPos, ]
-    
-    return(finCombDf)
-  })
-  names(selCombRandomLst) <- paste0("CV_", 1:nCV)
-  saveRDS(object = selCombRandomLst, file = fileNameSelCombRandom)
-} else {
-  selCombRandomLst <- readRDS(file = fileNameSelCombRandom)
-}
-
-##### 2.2. All combinations for selected lines #####
+##### 2.1. Design-D: all combinations for selected lines #####
 fileNameSelCombAll <- paste0(saveDir, scriptID, "trainData_selCombName_allComb.rds")
 if (!file.exists(fileNameSelCombAll)) {
+  ### Historical Design-D sets may be supplied locally; this seed is for new sets only.
+  set.seed(20261106L)
   selCombAllLst <- lapply(X = 1:nCV, FUN = function(cvNo) {
     
-    selSbName <- sample(x = sbName, size = nSbM2, replace = FALSE)
-    selGmName <- sample(x = gmName, size = nGmM2, replace = FALSE)
+    selSbName <- sample(x = sbName, size = nSbCV1, replace = FALSE)
+    selGmName <- sample(x = gmName, size = nGmCV1, replace = FALSE)
     finCombDf <- expand.grid(selSbName, selGmName, stringsAsFactors = FALSE)
     colnames(finCombDf) <- c("Sb", "Gm")
     
@@ -85,46 +63,41 @@ if (!file.exists(fileNameSelCombAll)) {
   selCombAllLst <- readRDS(file = fileNameSelCombAll)
 }
 
-##### 2.3. All lines used at least one time #####
-fileNameSelCombOnce <- paste0(saveDir, scriptID, "trainData_selCombName_useOnce.rds")
-if (!file.exists(fileNameSelCombOnce)) {
+##### 2.2. Design-B: balanced coverage of all lines with unique pairs #####
+fileNameSelCombOnce <- paste0(saveDir, scriptID,
+                             "trainData_selCombName_useOnce.rds")
+selCombOnceLst <- if (file.exists(fileNameSelCombOnce)) readRDS(fileNameSelCombOnce) else NULL
+### Replace the legacy design under the original filename instead of reusing duplicate pairs.
+if (!identical(attr(selCombOnceLst, "design"), "balanced_unique_pairs")) {
+  allCombDf <- expand.grid(Sb = sbName, Gm = gmName, stringsAsFactors = FALSE)
   selCombOnceLst <- lapply(X = 1:nCV, FUN = function(cvNo) {
-    
-    finCombDf <- as.data.frame(matrix(data = NA, nrow = nComb, ncol = 2))
-    colnames(finCombDf) <- c("Sb", "Gm")
-    
-    ### sorghum
-    while (any(is.na(finCombDf$Sb))) {
-      sbPosVec <- which(is.na(finCombDf$Sb))
-      basicSbPos <- sample(x = sbPosVec, size = min(length(sbName), length(sbPosVec)), 
-                           replace = FALSE)
-      if (length(sbPosVec) < length(sbName)) {
-        finCombDf[basicSbPos, "Sb"] <- sample(x = sbName, size = length(sbPosVec), replace = FALSE)
-      } else {
-        finCombDf[basicSbPos, "Sb"] <- sbName
-      }
-    }
-    
-    ### soybean
-    while(any(is.na(finCombDf$Gm))) {
-      gmPosVec <- which(is.na(finCombDf$Gm))
-      basicGmPos <- sample(x = gmPosVec, size = min(length(gmName), length(gmPosVec)), 
-                           replace = FALSE)
-      if (length(gmPosVec) < length(gmName)) {
-        finCombDf[basicGmPos, "Gm"] <- sample(x = gmName, size = length(gmPosVec), replace = FALSE)
-      } else {
-        finCombDf[basicGmPos, "Gm"] <- gmName
-      }
-    }
+    ### Balance both crops' marginal counts while selecting every pair at most once.
+    set.seed(cv2Seed + cvNo)
+    combPos <- SelectBroadCoverage(pairDf = allCombDf, trainingSize = nComb)
+    finCombDf <- allCombDf[combPos, ]
+    rownames(finCombDf) <- NULL
     return(finCombDf)
   })
   names(selCombOnceLst) <- paste0("CV_", 1:nCV)
+  attr(selCombOnceLst, "seed") <- setNames(cv2Seed + seq_len(nCV), names(selCombOnceLst))
+  attr(selCombOnceLst, "design") <- "balanced_unique_pairs"
   saveRDS(object = selCombOnceLst, file = fileNameSelCombOnce)
 } else {
   selCombOnceLst <- readRDS(file = fileNameSelCombOnce)
 }
 
+### Check generated or reused training sets against the CV2 design.
+stopifnot(length(selCombOnceLst) == nCV)
+for (finCombDf in selCombOnceLst) {
+  sbCount <- table(factor(finCombDf$Sb, levels = sbName))
+  gmCount <- table(factor(finCombDf$Gm, levels = gmName))
+  stopifnot(nrow(finCombDf) == nComb,
+            !anyDuplicated(finCombDf[, c("Sb", "Gm")]),
+            all(finCombDf$Sb %in% sbName), all(finCombDf$Gm %in% gmName),
+            all(sbCount >= floor(nComb / length(sbName))),
+            all(sbCount <= ceiling(nComb / length(sbName))),
+            all(gmCount >= floor(nComb / length(gmName))),
+            all(gmCount <= ceiling(nComb / length(gmName))))
+}
 
-# lapply(X = selCombOnceLst, FUN = function(oneCvMat) {
-#   table(oneCvMat$Gm)
-# })
+

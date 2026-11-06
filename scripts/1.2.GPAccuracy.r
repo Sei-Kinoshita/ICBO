@@ -1,74 +1,43 @@
-###### 0. Settings ######
-##### 0.1. Remove objects #####
+###### 1.2. Manuscript Figure 2 and Figures S3, S5-S8 ######
 rm(list = ls())
-gc(reset = TRUE);gc(reset = TRUE)
-
-##### 0.2. Load Packages and Functions #####
 require(ggplot2)
-require(scales)
 require(dplyr)
 require(multcompView)
-
-##### 0.3. Define Parameters #####
+source("scripts/function_scripts/2.1.function.BOEval.R")
+source("scripts/function_scripts/1.2.function.GPAccuracy.R")
 scriptID <- "1.2."
-
-cropName <- c("Sb", "Gm")
-
-nRep <- 10 ### repetition for phenotype
-nCV <- 10
-modelName <- c("Model1_DGE", "Model2_DGE_IGE", "Model3_GMA_SMA", 
-               "Model4_Multi_DGE_IGE", "Model5_Multi_GMA_SMA")
-
-##### 0.4. Define Directories #####
-dirData <- "data/"
-dirPheno <- paste0(dirData, "phenotype/")
-dirComb <- paste0(dirData, "selTrainData_GP/")
-dirGpPred <- "midstream/1.1.GP_CV/"
-
-saveDir <- paste0("midstream/", scriptID, "GP_Accuracy/")
-if (!dir.exists(saveDir)) {
-  dir.create(saveDir, recursive = TRUE)
-}
-
-
-###### 1. Load Data ######
-##### 1.1. Parameter Set #####
-fileNameParSet <- paste0(dirPheno, "0.3.parmeterSet.rds")
-parSetDf <- readRDS(file = fileNameParSet)
-nPar <- nrow(parSetDf)
-
-##### 1.2. Pair Name (fixed order) #####
-fileNamePairName <- paste0(dirPheno, "0.3.pairNameDf_5214Pair.rds")
-pairNameDf <- readRDS(file = fileNamePairName)
-
-##### 1.3. Selected combination for CV #####
-fileNameSelCombLst1 <- paste0(dirComb, "0.4.trainData_selCombName_random.rds")
-fileNameSelCombLst2 <- paste0(dirComb, "0.4.trainData_selCombName_allComb.rds")
-fileNameSelCombLst3 <- paste0(dirComb, "0.4.trainData_selCombName_useOnce.rds")
-selCombRandomLst <- readRDS(file = fileNameSelCombLst1)
-selCombAllLst <- readRDS(file = fileNameSelCombLst2)
-selCombOnceLst <- readRDS(file = fileNameSelCombLst3)
-
-cvCombLst <- list(Random = selCombRandomLst, All = selCombAllLst, Once = selCombOnceLst)
-cvMethod <- names(cvCombLst)
-rm(selCombRandomLst);rm(selCombAllLst);rm(selCombOnceLst)
-
-
-
-
-###### 2. Accuracy Plot ######
-##### 2.1. Scatter Plot #####
-### for saving accuracy result
-# addDf <- expand.grid(Crop = cropName, Model = modelName, 
-#                      CVMethod = cvMethod, CV = 1:nCV)
-# resDf <- cbind(parSetDf[rep(1:nPar, times = nrow(addDf)), ], 
-#                addDf[rep(1:nrow(addDf), each = nPar), ])
-# resDf$Accuracy <- rep(NA, nrow(resDf))
-fileNameAccuDf <- paste0(saveDir, scriptID, "GP_Accuracy_df.rds")
-if (!file.exists(fileNameAccuDf)) {
+saveDir <- "midstream/1.2.GP_Accuracy/"
+dir.create(saveDir, recursive = TRUE, showWarnings = FALSE)
+fileNameAccuDf <- paste0(saveDir, scriptID, "GP_PublicationSummary.rds")
+### Default: redraw from locally supplied archives without fitting models.
+useArchivedResults <- !isTRUE(getOption("ICBO.rebuildSummaries", FALSE))
+if (useArchivedResults) {
+  archiveFiles <- "data/publicationResults.rds"
+  if (!all(file.exists(archiveFiles))) {
+    stop("Publication archives are not distributed with this code-only release. ",
+      "Supply the local archives, or rerun the analysis and set ",
+      "options(ICBO.rebuildSummaries = TRUE); see README.md.", call. = FALSE)
+  }
+  publication <- readRDS("data/publicationResults.rds")
+  resDf <- publication$gpAccuracy
+  correlationRecovery <- publication$correlationRecovery
+} else {
+  ### Rebuild after running 0.1-1.1; new MCMC fits need not equal historical fits.
+  nRep <- nCV <- 10L
+  cropName <- c("Sb", "Gm")
+  modelName <- c("Model1_DGE", "Model2_DGE_IGE", "Model3_GMA_SMA",
+    "Model4_Multi_DGE_IGE", "Model5_Multi_GMA_SMA")
+  dirPheno <- "data/phenotype/"
+  dirGpPred <- "midstream/1.1.GP_CV/"
+  parSetDf <- readRDS(paste0(dirPheno, "0.3.parmeterSet.rds"))
+  parNoVec <- seq_len(nrow(parSetDf))
+  pairNameDf <- readRDS(paste0(dirPheno, "0.3.pairNameDf_5214Pair.rds"))
+  cvCombLst <- list(All = readRDS("data/selTrainData_GP/0.4.trainData_selCombName_allComb.rds"),
+    Once = readRDS("data/selTrainData_GP/0.4.trainData_selCombName_useOnce.rds"))
+  cvMethod <- names(cvCombLst)
   ### plot and calculate accuracy
   resDf <- do.call(what = rbind, 
-                   args = pbmcapply::pbmclapply(X = 1:nPar, FUN = function(parNo) {
+                   args = lapply(X = parNoVec, FUN = function(parNo) {
                      
                      ### parmeter set
                      genCor <- parSetDf$genCor[parNo]
@@ -100,7 +69,7 @@ if (!file.exists(fileNameAccuDf)) {
                                                                        if (modelNow == "Model5_Multi_GMA_SMA") {
                                                                          ### for Model 5
                                                                          fileNameCvRes <- paste0(dirGpPred, modelNow, "/", cvMethodNow, "/CV", cvNo, 
-                                                                                                 "/allRes/1.1.Multitrait_predicted_yNew_parNo_", parNo, 
+                                                                                                 "/allRes/1.1.", "Multitrait_predicted_yNew_parNo_", parNo, 
                                                                                                  "_", cvMethodNow, "_CV_", cvNo, ".rds")
                                                                          ### predicted phenotype
                                                                          gpResNow <- readRDS(file = fileNameCvRes)
@@ -115,7 +84,7 @@ if (!file.exists(fileNameAccuDf)) {
                                                                        } else if (modelNow == "Model4_Multi_DGE_IGE") {
                                                                          ### for Model 4
                                                                          fileNameCvRes <- paste0(dirGpPred, modelNow, "/", cvMethodNow, "/CV", cvNo, 
-                                                                                                 "/allRes/1.1.Multitrait_fitting_allRes_parNo_", parNo, 
+                                                                                                 "/allRes/1.1.", "Multitrait_fitting_allRes_parNo_", parNo, 
                                                                                                  "_", cvMethodNow, "_CV_", cvNo, ".rds")
                                                                          
                                                                          ### predicted phenotype
@@ -155,31 +124,20 @@ if (!file.exists(fileNameAccuDf)) {
                                                                        }
                                                                        ### accuracy
                                                                        phenoCor <- round(cor(yTrue, yPred), digits = 3)
-                                                                       ### accuracy plot
-                                                                       plotDir <- paste0(saveDir, "GP_Accuracy_ScatterPlot/")
-                                                                       if (!dir.exists(plotDir)) {
-                                                                         dir.create(path = plotDir, recursive = TRUE)
-                                                                       }
-                                                                       fileNameScatPlot <- paste0(plotDir, "genCor_", genCor, "_h2_", h2, 
-                                                                                                  "_gamma_", gamma, "_repNo_", repNo, "_", 
-                                                                                                  cvMethodNow, "_", modelNow, "_", 
-                                                                                                  cropNow, "_cvNo_", cvNo, ".png")
-                                                                       if (!file.exists(fileNameScatPlot)) {
-                                                                         png(filename = fileNameScatPlot, width = 1000, height = 1000)
-                                                                         plotTitle <- paste0(modelNow, "/", cropNow, "/", cvMethodNow, 
-                                                                                             "/CV:", cvNo, "/genCor:", genCor, 
-                                                                                             "/h2:", h2, "/gamma:", gamma, "/repNo:", repNo)
-                                                                         plot(yTrue, yPred, main = plotTitle, 
-                                                                              xlab = "Observed", ylab = "Predicted")
-                                                                         legend("bottomright", legend = paste0("r = ", phenoCor))
-                                                                         dev.off()
-                                                                       }
-                                                                       
                                                                        ### result (correlation)
                                                                        resVec <- data.frame(genCor = genCor, h2 = h2, gamma = gamma, rep = repNo, 
                                                                                             Crop = cropNow, Model = modelNow, CVMethod = cvMethodNow, 
                                                                                             CV = cvNo, Accuracy = phenoCor)
                                                                        
+                                                                       timingNow <- if (modelNow == "Model3_GMA_SMA") {
+                                                                         attr(yPred, "timing")
+                                                                       } else if (modelNow == "Model5_Multi_GMA_SMA") {
+                                                                         attr(gpResNow, "timing")
+                                                                       } else gpResNow$timing
+                                                                       resVec$fitPredictionTime <- timingNow$fitPredictionTime
+                                                                       resVec$nTrainingPair <- timingNow$nTrainingPair
+                                                                       resVec$nPredictionCandidate <- timingNow$nPredictionCandidate
+                                                                       resVec$FitCrop <- timingNow$Crop
                                                                        return(resVec)
                                                                      }))
                                                            }))
@@ -188,80 +146,30 @@ if (!file.exists(fileNameAccuDf)) {
                      
                      return(resMat)
                      
-                   }, mc.cores = 40))
+                   }))
   
   resDf$genCor <- factor(resDf$genCor)
   resDf$h2 <- factor(resDf$h2)
   resDf$gamma <- factor(resDf$gamma)
-  ### save
-  saveRDS(object = resDf, file = fileNameAccuDf)
-} else {
-  resDf <- readRDS(file = fileNameAccuDf)
+  correlationRecovery <- EvaluateGeneticCorrelationRecovery(parSetDf, pairNameDf,
+    dirPheno, dirGpPred, saveDir, scriptID, cvCombLst,
+    nIter = 10000L, burnIn = 2000L, thin = 20L)
 }
 
-
-
-
-##### 2.2. Box Plot #####
-#### 2.2.1. for each scenario ####
-fileNameAccuBoxPlot <- paste0(saveDir, scriptID, "GP_Accuracy_BoxPlot.pdf")
-pdf(file = fileNameAccuBoxPlot, width = 12, height = 10)
-lapply(X = c("genCor", "h2", "gamma", "CVMethod"), FUN = function(xNow) {
-  ggplot(resDf, 
-         aes(x = .data[[xNow]], y = .data[["Accuracy"]], fill = .data[["Model"]])) + 
-    geom_boxplot() + 
-    facet_wrap(~Crop) + 
-    # scale_fill_discrete(guide = "none") + 
-    theme(text = element_text(size = 17))
-})
-dev.off()
-
-
-#### 2.2.2. 9 cells (1 plot for h2=0.3/0.7, SB, GM) ####
-### remove Random CV
-resFilDf <- resDf[(resDf$CVMethod != "Random"), ]
-
-resLowSb <- resFilDf[(resFilDf$h2 == 0.3) & (resFilDf$Crop == "Sb"), ]
-resLowGm <- resFilDf[(resFilDf$h2 == 0.3) & (resFilDf$Crop == "Gm"), ]
-resHighSb <- resFilDf[(resFilDf$h2 == 0.7) & (resFilDf$Crop == "Sb"), ]
-resHighGm <- resFilDf[(resFilDf$h2 == 0.7) & (resFilDf$Crop == "Gm"), ]
-resLow <- resFilDf[(resFilDf$h2 == 0.3), ]
-resHigh <- resFilDf[(resFilDf$h2 == 0.7), ]
-
-### plot
-source("scripts/function_scripts/1.2.function.GPAccuracy.R")
-fileNameAccu4Data <- paste0(saveDir, scriptID, "Accuracy_Model_Boxplot_Tukey.pdf")
-pdf(fileNameAccu4Data, width = 12, height = 9)
-p1 <- MakePlot(dat = resLowSb, plotTitle = "h2=0.3 / Sb")
-p2 <- MakePlot(dat = resLowGm, plotTitle = "h2=0.3 / Gm")
-p3 <- MakePlot(dat = resHighSb, plotTitle = "h2=0.7 / Sb")
-p4 <- MakePlot(dat = resHighGm, plotTitle = "h2=0.7 / Gm")
-p5 <- MakePlot(dat = resLow, plotTitle = "h2=0.3")
-p6 <- MakePlot(dat = resHigh, plotTitle = "h2=0.7")
-print(p1); print(p2); print(p5); print(p3); print(p4); print(p6)
-dev.off()
-
-
-
-# ### result only for Model3
-# resM3Df <- resDf[resDf$Model == "Model3_GMA_SMA", ]
-# resM3SbDf <- resM3Df[resM3Df$Crop == "Sb", ]
-# resM3GmDf <- resM3Df[resM3Df$Crop == "Gm", ]
-# 
-# # resDfNow <- resM3SbDf ### Sorghum
-# resDfNow <- resM3GmDf ### Soybean
-# ggplot(data = resDfNow, aes(x = gamma, y = Accuracy, fill = genCor)) + 
-#   stat_summary(fun = mean, 
-#                geom = "bar", 
-#                position = position_dodge(width = 0.9)) + 
-#   stat_summary(fun.data = mean_se, 
-#                geom = "errorbar", 
-#                position = position_dodge(width = 0.9), 
-#                width = 0.2) + 
-#   facet_wrap(~h2) + 
-#   scale_y_continuous(limits = c(0, 1)) + 
-#   theme_bw() + 
-#   theme(text = element_text(size = 17))
-# 
-# # mean(resDfNow$Accuracy[resDfNow$h2 == 0.3]) ### mean accuracy for h2=0.3
-# # mean(resDfNow$Accuracy[resDfNow$h2 == 0.7]) ### mean accuracy for h2=0.7
+###### Published predictive-ability panels and their paired comparisons ######
+figureGroups <- list(Figure2 = c("Sb", "Gm"), FigureS7 = "Sb", FigureS8 = "Gm")
+comparison <- list()
+for (figure in names(figureGroups)) {
+  pdf(paste0(saveDir, scriptID, figure, "_PredictiveAbility.pdf"), width = 12, height = 9)
+  for (h in c(.3, .7)) {
+    dat <- resDf[resDf$Crop %in% figureGroups[[figure]] & resDf$h2 == h, ]
+    p <- MakePlot(dat, paste0("Predictive ability / h2 = ", h))
+    print(p)
+    comparison[[length(comparison) + 1L]] <- attr(p, "modelComparison")
+  }
+  dev.off()
+}
+PlotGeneticCorrelationRecovery(correlationRecovery, saveDir, scriptID)
+attr(resDf, "geneticCorrelationRecovery") <- correlationRecovery
+attr(resDf, "modelComparison") <- bind_rows(comparison)
+saveRDS(resDf, fileNameAccuDf)
