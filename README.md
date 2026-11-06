@@ -8,9 +8,9 @@ Run the scripts from the repository root in the following order. Inputs are read
 
 | Step | Scripts in `scripts/` |
 |---|---|
-| Genotype preparation and phenotype simulation | `0.1.modifyGeno.r` → `0.2.sampleTrueMrkEff.r` → `0.3.generatePheno.r` |
-| Prediction model evaluation | `0.4.selTrainDataGP.r` → `1.0.GPFitting.r` → `1.1.GPPred.r` → `1.2.GPAccuracy.r` |
-| Genotype-pair search | `2.0.BO.R` → `2.1.BOEval.R` |
+| Genotype preprocess and phenotype simulation | `0.1.modifyGeno.r` → `0.2.sampleTrueMrkEff.r` → `0.3.generatePheno.r` |
+| Genomic prediction and model evaluation | `0.4.selTrainDataGP.r` → `1.0.GPFitting.r` → `1.1.GPPred.r` → `1.2.GPAccuracy.r` |
+| Genotype-pair optimization | `2.0.BO.R` → `2.1.BOEval.R` |
 | Tables and figures | `3.0.makeTables.R` (Tables S1–S3) → `3.2.makeFigures.R` (Figures 2–5, S1–S3, S5–S10) |
 
 Figure sections are labelled in `3.2.makeFigures.R`. Figures 1 and S4 are manually drawn schematics. Functions shared by the scripts are in `scripts/function_scripts/`.
