@@ -1,6 +1,6 @@
 # ICBO
 
-Code for **Efficient Optimization of Genotype Pairs for Intercropping using Genomic Prediction and Bayesian Optimization**, by Sei Kinoshita and Hiroyoshi Iwata.
+Code for **Efficient Optimization of Genotype Pairs for Intercropping using Genomic Prediction and Bayesian Optimization**, by Sei Kinoshita and Hiroyoshi Iwata. https://www.biorxiv.org/content/10.64898/2026.05.15.725387v1
 
 ## Workflow
 
